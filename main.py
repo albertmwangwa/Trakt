@@ -16,9 +16,6 @@ from datetime import datetime
 from typing import Optional
 import argparse
 
-# Add src directory to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
-
 from src.camera_handler import ONVIFCameraHandler
 from src.ocr_engine import OCREngine, TensorFlowOCRModel
 

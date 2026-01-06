@@ -38,6 +38,7 @@ ocr:
   
   # Text filtering
   min_text_length: 2     # Minimum characters to consider
+  strict_pattern_matching: false  # Only keep detections matching filter_patterns
   filter_patterns:       # Regex patterns to filter/highlight
     - "[0-9]{3,}"        # Numbers with 3+ digits
     - "[A-Z]{2,}"        # Uppercase sequences

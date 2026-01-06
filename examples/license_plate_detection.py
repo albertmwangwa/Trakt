@@ -4,6 +4,12 @@ Example: License Plate Detection
 This example demonstrates detecting license plates from camera feed.
 """
 
+import sys
+import os
+
+# Add parent directory to path to import src modules
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from src.camera_handler import ONVIFCameraHandler
 from src.ocr_engine import OCREngine
 import cv2

@@ -27,6 +27,7 @@ class OCREngine:
         self.confidence_threshold = config.get('confidence_threshold', 0.5)
         self.min_text_length = config.get('min_text_length', 2)
         self.filter_patterns = config.get('filter_patterns', [])
+        self.strict_pattern_matching = config.get('strict_pattern_matching', False)
         self.logger = logging.getLogger(__name__)
         
         # Initialize the selected OCR engine
@@ -178,12 +179,16 @@ class OCREngine:
         
         Args:
             frame: Input frame
-            preprocess: Whether to preprocess the frame
+            preprocess: Whether to preprocess the frame (recommended for Tesseract,
+                       EasyOCR works better with color images)
             
         Returns:
             List of detection results with text, confidence, and bounding box
         """
-        if preprocess:
+        # EasyOCR works better with color images, so skip preprocessing
+        if self.engine_type == 'easyocr':
+            processed_frame = frame
+        elif preprocess:
             processed_frame = self.preprocess_frame(frame)
         else:
             processed_frame = frame
@@ -233,10 +238,9 @@ class OCREngine:
                         result['matched_pattern'] = pattern
                         break
                 
-                # Optionally, only keep results that match patterns
-                # Uncomment to enable strict filtering:
-                # if not matches_pattern:
-                #     continue
+                # Only keep results that match patterns if strict_pattern_matching is enabled
+                if self.strict_pattern_matching and not matches_pattern:
+                    continue
             
             filtered.append(result)
         

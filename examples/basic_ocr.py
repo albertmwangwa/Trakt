@@ -4,10 +4,17 @@ Example: Basic OCR from ONVIF Camera
 This example demonstrates basic usage of the Trakt OCR application.
 """
 
+import sys
+import os
+
+# Add parent directory to path to import src modules
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from src.camera_handler import ONVIFCameraHandler
 from src.ocr_engine import OCREngine
 import cv2
 import logging
+import argparse
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -32,6 +39,11 @@ ocr_config = {
 
 def main():
     """Run basic OCR example."""
+    parser = argparse.ArgumentParser(description='Basic OCR from ONVIF Camera')
+    parser.add_argument('--frames', type=int, default=100, 
+                       help='Number of frames to process (default: 100)')
+    args = parser.parse_args()
+    
     # Initialize camera
     camera = ONVIFCameraHandler(
         CAMERA_HOST, CAMERA_PORT, CAMERA_USER, CAMERA_PASS
@@ -58,7 +70,7 @@ def main():
     # Process frames
     frame_count = 0
     try:
-        while frame_count < 100:  # Process 100 frames
+        while frame_count < args.frames:
             ret, frame = camera.read_frame()
             
             if not ret:
