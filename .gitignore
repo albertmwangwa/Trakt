@@ -142,7 +142,8 @@ Thumbs.db
 
 # Project specific
 config/camera_credentials.json
-output/
+output/*
+!output/README.md
 recordings/
 screenshots/
 models/pretrained/
