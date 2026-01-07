@@ -8,6 +8,9 @@ let refreshInterval = null;
 
 // Initialize the application
 document.addEventListener('DOMContentLoaded', function() {
+    // Set current year
+    document.getElementById('currentYear').textContent = new Date().getFullYear();
+    
     refreshStatus();
     refreshDetections();
     refreshResults();

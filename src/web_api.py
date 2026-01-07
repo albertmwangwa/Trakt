@@ -73,19 +73,24 @@ def get_camera_info():
 @app.route('/api/results')
 def get_results():
     """Get saved OCR results from files."""
+    import heapq
     results_dir = os.path.join(os.path.dirname(__file__), '..', 'output', 'results')
     results = []
     
     if os.path.exists(results_dir):
-        for filename in sorted(os.listdir(results_dir), reverse=True)[:100]:
-            if filename.endswith('.json'):
-                filepath = os.path.join(results_dir, filename)
-                try:
-                    with open(filepath, 'r') as f:
-                        data = json.load(f)
-                        results.append(data)
-                except Exception as e:
-                    logger.warning(f"Failed to read result file {filename}: {e}")
+        # Get json files and use heapq for efficient top-N selection
+        json_files = [f for f in os.listdir(results_dir) if f.endswith('.json')]
+        # Get the 100 most recent files (largest names = most recent by timestamp)
+        recent_files = heapq.nlargest(100, json_files)
+        
+        for filename in recent_files:
+            filepath = os.path.join(results_dir, filename)
+            try:
+                with open(filepath, 'r') as f:
+                    data = json.load(f)
+                    results.append(data)
+            except Exception as e:
+                logger.warning(f"Failed to read result file {filename}: {e}")
     
     return jsonify({
         'success': True,
@@ -129,5 +134,8 @@ def run_server(host='0.0.0.0', port=5000, debug=False):
 
 
 if __name__ == '__main__':
+    import os
     logging.basicConfig(level=logging.INFO)
-    run_server(debug=True)
+    # Only enable debug mode if explicitly set via environment variable
+    debug_mode = os.environ.get('FLASK_DEBUG', 'false').lower() == 'true'
+    run_server(debug=debug_mode)
