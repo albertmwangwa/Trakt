@@ -21,5 +21,9 @@ requests>=2.31.0
 # Logging and monitoring
 coloredlogs>=15.0
 
+# Web API and CORS support
+flask>=3.0.0
+flask-cors>=4.0.0
+
 # Optional: For GPU support (uncomment if needed)
 # tensorflow-gpu>=2.13.0

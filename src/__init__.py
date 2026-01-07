@@ -10,9 +10,13 @@ __author__ = 'albertmwangwa'
 
 from .camera_handler import ONVIFCameraHandler
 from .ocr_engine import OCREngine, TensorFlowOCRModel
+from .web_api import app, run_server, update_state
 
 __all__ = [
     'ONVIFCameraHandler',
     'OCREngine',
-    'TensorFlowOCRModel'
+    'TensorFlowOCRModel',
+    'app',
+    'run_server',
+    'update_state'
 ]
