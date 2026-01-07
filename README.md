@@ -202,12 +202,22 @@ Trakt/
 ├── Dockerfile              # Docker image definition
 ├── docker-compose.yml      # Docker Compose configuration
 ├── .gitignore              # Git ignore rules
+├── .github/
+│   └── workflows/          # GitHub Actions CI/CD workflows
+│       ├── ci.yml          # Build and test workflow
+│       └── code-quality.yml # Linting and security checks
 ├── src/
 │   ├── camera_handler.py   # ONVIF camera connection handler
-│   └── ocr_engine.py       # OCR engine implementations
+│   ├── ocr_engine.py       # OCR engine implementations
+│   └── web_api.py          # REST API with CORS support
+├── web/                    # Web interface files
+│   ├── index.html          # Dashboard HTML
+│   ├── styles.css          # Dashboard styles
+│   └── app.js              # Dashboard JavaScript
 ├── tests/
 │   ├── test_camera_handler.py
-│   └── test_ocr_engine.py
+│   ├── test_ocr_engine.py
+│   └── test_web_api.py     # Web API tests
 ├── models/                 # Directory for TensorFlow models
 ├── output/
 │   ├── results/           # JSON results
@@ -230,6 +240,33 @@ python -m unittest tests/test_camera_handler.py
 # Run with verbose output
 python -m unittest discover tests -v
 ```
+
+## Web Interface
+
+Trakt includes a modern web interface for monitoring OCR activity and viewing results.
+
+### Starting the Web Server
+
+```bash
+python -m src.web_api
+```
+
+The web interface will be available at `http://localhost:5000`.
+
+### REST API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/` | GET | Web dashboard |
+| `/api/health` | GET | Health check endpoint |
+| `/api/status` | GET | Application status and statistics |
+| `/api/detections` | GET | Recent OCR detections |
+| `/api/camera/info` | GET | Camera information |
+| `/api/results` | GET | Saved OCR results |
+
+### CORS Support
+
+The API supports Cross-Origin Resource Sharing (CORS), allowing integration with external web applications and services.
 
 ## Advanced Usage
 
@@ -361,9 +398,9 @@ For issues, questions, or contributions, please open an issue on GitHub.
 
 ## Roadmap
 
-- [ ] Web interface for configuration and monitoring
+- [x] Web interface for configuration and monitoring
+- [x] REST API for integration with other systems
 - [ ] Support for multiple simultaneous cameras
 - [ ] Database integration for results storage
 - [ ] Alert system for specific text patterns
-- [ ] REST API for integration with other systems
 - [ ] Enhanced TensorFlow model training utilities

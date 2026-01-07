@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trakt OCR Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="logo">
+                <h1>📷 Trakt OCR</h1>
+                <span class="tagline">TensorFlow OCR for ONVIF Cameras</span>
+            </div>
+            <div class="status-indicator">
+                <span class="status-dot" id="statusDot"></span>
+                <span class="status-text" id="statusText">Connecting...</span>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <section class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon">🖼️</div>
+                    <div class="stat-info">
+                        <h3>Frames Processed</h3>
+                        <p class="stat-value" id="frameCount">0</p>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">🔍</div>
+                    <div class="stat-info">
+                        <h3>Text Detections</h3>
+                        <p class="stat-value" id="detectionCount">0</p>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">📹</div>
+                    <div class="stat-info">
+                        <h3>Camera Status</h3>
+                        <p class="stat-value" id="cameraStatus">Unknown</p>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">⏱️</div>
+                    <div class="stat-info">
+                        <h3>Last Update</h3>
+                        <p class="stat-value" id="lastUpdate">Never</p>
+                    </div>
+                </div>
+            </section>
+
+            <section class="camera-info-section">
+                <h2>Camera Information</h2>
+                <div class="camera-info" id="cameraInfo">
+                    <p class="no-data">No camera information available</p>
+                </div>
+            </section>
+
+            <section class="detections-section">
+                <div class="section-header">
+                    <h2>Recent Detections</h2>
+                    <button class="btn-refresh" onclick="refreshDetections()">🔄 Refresh</button>
+                </div>
+                <div class="detections-list" id="detectionsList">
+                    <p class="no-data">No detections yet</p>
+                </div>
+            </section>
+
+            <section class="results-section">
+                <div class="section-header">
+                    <h2>Saved Results</h2>
+                    <button class="btn-refresh" onclick="refreshResults()">🔄 Refresh</button>
+                </div>
+                <div class="results-list" id="resultsList">
+                    <p class="no-data">No saved results</p>
+                </div>
+            </section>
+        </main>
+
+        <footer class="footer">
+            <p>&copy; 2026 Trakt OCR - TensorFlow OCR for ONVIF Cameras</p>
+        </footer>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>
