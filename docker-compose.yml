@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  trakt-ocr:
+    build: .
+    container_name: trakt-ocr
+    volumes:
+      - ./config.yaml:/app/config.yaml
+      - ./output:/app/output
+      - ./models:/app/models
+    environment:
+      - TZ=UTC
+    restart: unless-stopped
+    # Uncomment for GPU support
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]

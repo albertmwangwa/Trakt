@@ -1,0 +1,87 @@
+# Camera configuration
+camera:
+  # ONVIF camera connection settings
+  host: "192.168.1.100"  # Camera IP address
+  port: 80               # ONVIF port (usually 80 or 8080)
+  username: "admin"      # Camera username
+  password: "password"   # Camera password
+  
+  # Stream settings
+  stream_profile: 0      # Profile token (0 for main stream, 1 for sub stream)
+  transport: "tcp"       # Transport protocol: tcp or udp
+  
+  # Frame capture settings
+  fps_limit: 5           # Frames per second to process (lower = less CPU usage)
+  resolution:
+    width: 1920
+    height: 1080
+
+# OCR configuration
+ocr:
+  # OCR engine: 'tesseract' or 'easyocr'
+  engine: "easyocr"
+  
+  # Tesseract settings
+  tesseract:
+    language: "eng"      # OCR language (eng, fra, deu, etc.)
+    oem: 3               # OCR Engine Mode (0-3)
+    psm: 6               # Page Segmentation Mode (0-13)
+    
+  # EasyOCR settings
+  easyocr:
+    languages: ["en"]    # List of languages to recognize
+    gpu: false           # Use GPU acceleration
+    model_storage_directory: "./models/easyocr"
+  
+  # Text detection thresholds
+  confidence_threshold: 0.5  # Minimum confidence to consider detection valid
+  
+  # Text filtering
+  min_text_length: 2     # Minimum characters to consider
+  strict_pattern_matching: false  # Only keep detections matching filter_patterns
+  filter_patterns:       # Regex patterns to filter/highlight
+    - "[0-9]{3,}"        # Numbers with 3+ digits
+    - "[A-Z]{2,}"        # Uppercase sequences
+
+# TensorFlow model configuration
+tensorflow:
+  # Model settings
+  model_path: "./models/custom_ocr_model.h5"  # Path to custom TensorFlow model
+  use_pretrained: false  # Use pretrained model if available
+  
+  # Processing settings
+  batch_size: 1
+  input_shape: [224, 224, 3]  # Model input shape [height, width, channels]
+  
+  # GPU settings
+  gpu_memory_limit: 2048  # MB, set to null for no limit
+  allow_growth: true      # Allow GPU memory to grow as needed
+
+# Output configuration
+output:
+  # Save detected text
+  save_results: true
+  results_dir: "./output/results"
+  
+  # Save annotated frames
+  save_frames: true
+  frames_dir: "./output/frames"
+  save_interval: 30      # Save every N frames
+  
+  # Logging
+  log_level: "INFO"      # DEBUG, INFO, WARNING, ERROR
+  log_file: "./output/trakt.log"
+
+# Application settings
+app:
+  # Reconnection settings
+  reconnect_attempts: 5
+  reconnect_delay: 5     # seconds
+  
+  # Performance
+  use_threading: true
+  num_threads: 2
+  
+  # Display
+  show_preview: false    # Show live preview window
+  preview_scale: 0.5     # Scale factor for preview window
