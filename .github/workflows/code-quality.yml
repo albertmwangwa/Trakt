@@ -61,8 +61,7 @@ jobs:
 
     - name: Check for known security vulnerabilities
       run: |
-        pip install -r requirements.txt
-        safety check --full-report
+        safety check -r requirements.txt --full-report
 
     - name: Run bandit security linter
       run: |
