@@ -1,0 +1,6 @@
+include README.md
+include LICENSE
+include requirements.txt
+include config.yaml
+recursive-include examples *.py
+recursive-include web *.html *.css *.js
