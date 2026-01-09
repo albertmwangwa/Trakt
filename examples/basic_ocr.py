@@ -10,13 +10,13 @@ import sys
 # Add parent directory to path to import src modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import argparse
-import logging
+import argparse  # noqa: E402
+import logging  # noqa: E402
 
-import cv2
+import cv2  # noqa: E402
 
-from src.camera_handler import ONVIFCameraHandler
-from src.ocr_engine import OCREngine
+from src.camera_handler import ONVIFCameraHandler  # noqa: E402
+from src.ocr_engine import OCREngine  # noqa: E402
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

@@ -154,7 +154,7 @@ if __name__ == "__main__":
             logger.warning(f"Invalid port {port}, using default 5000")
             port = 5000
     except ValueError:
-        logger.warning(f"Invalid FLASK_PORT value, using default 5000")
+        logger.warning("Invalid FLASK_PORT value, using default 5000")
         port = 5000
 
     run_server(host=host, port=port, debug=debug_mode)

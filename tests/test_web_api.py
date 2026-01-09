@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 # Import directly from web_api to avoid loading camera_handler and ocr_engine
 # which have heavy dependencies (cv2, tensorflow)
-import importlib.util
+import importlib.util  # noqa: E402
 
 spec = importlib.util.spec_from_file_location(
     "web_api", os.path.join(os.path.dirname(__file__), "..", "src", "web_api.py")
