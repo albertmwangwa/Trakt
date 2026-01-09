@@ -49,7 +49,30 @@ camera:
   password: "password"   # Your password
 ```
 
-## Step 3: Run the Application
+## Step 3: (Optional) Enable Advanced Text Detection
+
+For improved accuracy, download and enable the EAST text detector:
+
+```bash
+# Download EAST model (95MB)
+wget https://github.com/oyyd/frozen-east-text-detection.pb/raw/master/frozen_east_text_detection.pb \
+     -O models/frozen_east_text_detection.pb
+
+# Or create models directory and download manually
+mkdir -p models
+# Then download from the URL above and place in models/
+```
+
+Enable in `config.yaml`:
+
+```yaml
+ocr:
+  use_text_detection: true
+  text_detection:
+    east_model_path: "./models/frozen_east_text_detection.pb"
+```
+
+## Step 4: Run the Application
 
 ```bash
 python main.py
@@ -107,8 +130,35 @@ else:
 
 1. **Customize OCR**: Edit `config.yaml` to adjust OCR settings
 2. **Add Patterns**: Configure text pattern filters
-3. **Try Examples**: Run examples in `examples/` directory
+3. **Try Examples**: Run examples in `examples/` directory:
+   - `python examples/basic_ocr.py` - Basic OCR
+   - `python examples/license_plate_detection.py` - License plate detection
+   - `python examples/text_detection_pipeline.py` - Advanced text detection
 4. **Build Custom Model**: See `models/README.md` for TensorFlow models
+
+## Advanced Features
+
+### Text Detection Pipeline
+
+The text detection pipeline uses EAST detector to identify text regions before OCR:
+
+1. **Text Region Detection**: EAST identifies bounding boxes
+2. **Preprocessing**: Deskewing and normalization
+3. **Region-based OCR**: Each region processed individually
+4. **Result Aggregation**: Combined results with improved accuracy
+
+### Preprocessing Options
+
+Configure advanced preprocessing in `config.yaml`:
+
+```yaml
+ocr:
+  preprocessing:
+    apply_deskewing: true              # Correct rotation
+    apply_contrast_enhancement: false  # Optional
+    apply_noise_removal: false         # Optional
+    apply_illumination_normalization: true  # Normalize lighting
+```
 
 ## Troubleshooting
 

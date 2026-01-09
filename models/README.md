@@ -1,15 +1,66 @@
 # Models Directory
 
-This directory is for storing TensorFlow models and EasyOCR models.
+This directory is for storing TensorFlow models, EAST text detection models, and EasyOCR models.
 
 ## Directory Structure
 
 ```
 models/
-├── custom_ocr_model.h5      # Your custom TensorFlow model
-├── easyocr/                  # EasyOCR models (auto-downloaded)
-└── pretrained/               # Pre-trained models
+├── frozen_east_text_detection.pb  # EAST text detector model
+├── custom_ocr_model.h5            # Your custom TensorFlow model
+├── easyocr/                        # EasyOCR models (auto-downloaded)
+└── pretrained/                     # Pre-trained models
 ```
+
+## EAST Text Detector
+
+The EAST (Efficient and Accurate Scene Text) detector is used to identify text regions in images before performing OCR. This two-stage approach (detection → OCR) can significantly improve accuracy.
+
+### Downloading the EAST Model
+
+Download the pre-trained EAST model:
+
+```bash
+# Create models directory
+mkdir -p models
+
+# Download EAST model (approx 95MB)
+wget https://github.com/oyyd/frozen-east-text-detection.pb/raw/master/frozen_east_text_detection.pb \
+     -O models/frozen_east_text_detection.pb
+```
+
+Or download manually from:
+- https://github.com/oyyd/frozen-east-text-detection.pb
+
+### Using EAST Text Detection
+
+Enable in `config.yaml`:
+
+```yaml
+ocr:
+  use_text_detection: true
+  text_detection:
+    east_model_path: "./models/frozen_east_text_detection.pb"
+    confidence_threshold: 0.5
+    nms_threshold: 0.4
+    input_width: 320
+    input_height: 320
+    region_padding: 5
+```
+
+### How It Works
+
+1. **Text Detection**: EAST detector identifies bounding boxes of text regions
+2. **Region Extraction**: Each detected region is extracted from the frame
+3. **Preprocessing**: Regions are preprocessed (deskewing, normalization)
+4. **OCR**: OCR engine processes each region individually
+5. **Result Aggregation**: Results from all regions are combined
+
+Benefits:
+- ✅ Improved accuracy on complex scenes
+- ✅ Better handling of multiple text orientations
+- ✅ Reduced false positives
+- ✅ More efficient processing of large images
 
 ## Using Custom TensorFlow Models
 

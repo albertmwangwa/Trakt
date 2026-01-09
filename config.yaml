@@ -21,6 +21,25 @@ ocr:
   # OCR engine: 'tesseract' or 'easyocr'
   engine: "easyocr"
   
+  # Enable EAST text detector for region-based OCR (improves accuracy)
+  use_text_detection: false  # Set to true to enable EAST text detection
+  
+  # Text detection settings (for EAST detector)
+  text_detection:
+    east_model_path: "./models/frozen_east_text_detection.pb"
+    confidence_threshold: 0.5
+    nms_threshold: 0.4
+    input_width: 320
+    input_height: 320
+    region_padding: 5  # Pixels to pad around detected regions
+  
+  # Preprocessing settings for text regions
+  preprocessing:
+    apply_deskewing: true
+    apply_contrast_enhancement: false
+    apply_noise_removal: false
+    apply_illumination_normalization: true
+  
   # Tesseract settings
   tesseract:
     language: "eng"      # OCR language (eng, fra, deu, etc.)

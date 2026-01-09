@@ -12,6 +12,8 @@ import cv2
 import numpy as np
 import tensorflow as tf
 
+from .text_detector import EASTTextDetector, TextRegionPreprocessor
+
 
 class OCREngine:
     """OCR engine for text detection and recognition."""
@@ -35,6 +37,14 @@ class OCREngine:
         self.ocr_reader = None
         self._initialize_engine()
 
+        # Initialize text detection components
+        self.use_text_detection = config.get("use_text_detection", False)
+        self.text_detector = None
+        self.preprocessor = TextRegionPreprocessor(config.get("preprocessing", {}))
+
+        if self.use_text_detection:
+            self._initialize_text_detector()
+
     def _initialize_engine(self):
         """Initialize the OCR engine based on configuration."""
         try:
@@ -46,6 +56,21 @@ class OCREngine:
                 self.logger.error(f"Unknown OCR engine: {self.engine_type}")
         except Exception as e:
             self.logger.error(f"Failed to initialize OCR engine: {e}")
+
+    def _initialize_text_detector(self):
+        """Initialize EAST text detector if configured."""
+        text_detection_config = self.config.get("text_detection", {})
+        model_path = text_detection_config.get("east_model_path")
+
+        if model_path:
+            self.logger.info("Initializing EAST text detector...")
+            self.text_detector = EASTTextDetector(model_path, text_detection_config)
+            self.logger.info("EAST text detector initialized")
+        else:
+            self.logger.warning(
+                "Text detection enabled but no EAST model path provided. "
+                "Download model from: https://github.com/oyyd/frozen-east-text-detection.pb"
+            )
 
     def _initialize_tesseract(self):
         """Initialize Tesseract OCR."""
@@ -190,6 +215,11 @@ class OCREngine:
         Returns:
             List of detection results with text, confidence, and bounding box
         """
+        # If text detection is enabled, use EAST detector first
+        if self.use_text_detection and self.text_detector:
+            return self._detect_text_with_regions(frame, preprocess)
+
+        # Otherwise, use standard OCR on full frame
         # EasyOCR works better with color images, so skip preprocessing
         if self.engine_type == "easyocr":
             processed_frame = frame
@@ -215,6 +245,72 @@ class OCREngine:
 
         except Exception as e:
             self.logger.error(f"Error during text detection: {e}")
+            return []
+
+    def _detect_text_with_regions(self, frame: np.ndarray, preprocess: bool) -> List[Dict]:
+        """
+        Detect text using EAST detector to find regions, then OCR each region.
+
+        Args:
+            frame: Input frame
+            preprocess: Whether to preprocess regions
+
+        Returns:
+            List of detection results
+        """
+        try:
+            # Detect text regions using EAST
+            text_regions = self.text_detector.detect(frame)
+
+            if not text_regions:
+                self.logger.debug("No text regions detected by EAST detector")
+                return []
+
+            self.logger.debug(f"EAST detected {len(text_regions)} text regions")
+
+            results = []
+
+            # Process each detected region
+            for (x1, y1, x2, y2) in text_regions:
+                # Add padding to region
+                padding = self.config.get("text_detection", {}).get("region_padding", 5)
+                x1 = max(0, x1 - padding)
+                y1 = max(0, y1 - padding)
+                x2 = min(frame.shape[1], x2 + padding)
+                y2 = min(frame.shape[0], y2 + padding)
+
+                # Extract region
+                region = frame[y1:y2, x1:x2]
+
+                if region.size == 0:
+                    continue
+
+                # Preprocess region if enabled
+                if preprocess:
+                    region = self.preprocessor.preprocess_text_region(region)
+
+                # Perform OCR on region
+                if self.engine_type == "tesseract":
+                    region_results = self.detect_text_tesseract(region)
+                elif self.engine_type == "easyocr":
+                    region_results = self.detect_text_easyocr(region)
+                else:
+                    continue
+
+                # Adjust bounding boxes to frame coordinates
+                for result in region_results:
+                    bbox = result["bbox"]
+                    result["bbox"] = [bbox[0] + x1, bbox[1] + y1, bbox[2] + x1, bbox[3] + y1]
+                    result["region"] = (x1, y1, x2, y2)  # Store original region
+                    results.append(result)
+
+            # Filter results
+            filtered_results = self._filter_results(results)
+
+            return filtered_results
+
+        except Exception as e:
+            self.logger.error(f"Error during text detection with regions: {e}")
             return []
 
     def _filter_results(self, results: List[Dict]) -> List[Dict]:
