@@ -91,37 +91,35 @@ class DataGenerator:
         Apply data augmentation to image.
 
         Args:
-            image: Input image
+            image: Input image (numpy array)
 
         Returns:
-            Augmented image
+            Augmented image (numpy array)
         """
-        # Random brightness
+        # Random brightness adjustment
         if np.random.random() > 0.5:
-            image = tf.image.random_brightness(image, 0.2)
+            factor = np.random.uniform(0.8, 1.2)
+            image = np.clip(image * factor, 0, 255).astype(image.dtype)
 
-        # Random contrast
+        # Random contrast adjustment
         if np.random.random() > 0.5:
-            image = tf.image.random_contrast(image, 0.8, 1.2)
+            factor = np.random.uniform(0.8, 1.2)
+            mean = image.mean()
+            image = np.clip((image - mean) * factor + mean, 0, 255).astype(image.dtype)
 
-        # Random flip
+        # Random horizontal flip
         if np.random.random() > 0.5:
-            image = tf.image.flip_left_right(image)
+            image = cv2.flip(image, 1)
 
         # Random rotation (small angles for text)
         if np.random.random() > 0.5:
             angle = np.random.uniform(-10, 10)
-            image = self._rotate_image(image, angle)
+            h, w = image.shape[:2]
+            center = (w // 2, h // 2)
+            matrix = cv2.getRotationMatrix2D(center, angle, 1.0)
+            image = cv2.warpAffine(image, matrix, (w, h))
 
         return image
-
-    def _rotate_image(self, image: np.ndarray, angle: float) -> np.ndarray:
-        """Rotate image by given angle."""
-        h, w = image.shape[:2]
-        center = (w // 2, h // 2)
-        matrix = cv2.getRotationMatrix2D(center, angle, 1.0)
-        rotated = cv2.warpAffine(image, matrix, (w, h))
-        return rotated
 
 
 class ModelBuilder:

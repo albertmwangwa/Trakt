@@ -8,7 +8,6 @@ import logging
 import threading
 import time
 from typing import Dict, List, Optional
-from queue import Queue
 
 from .camera_handler import ONVIFCameraHandler
 from .ocr_engine import OCREngine
@@ -53,9 +52,6 @@ class CameraInstance:
         self.thread = None
         self.frame_count = 0
         self.detection_count = 0
-
-        # Frame queue for async processing
-        self.frame_queue = Queue(maxsize=10)
 
     def start(self) -> bool:
         """

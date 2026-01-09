@@ -26,6 +26,11 @@ from sqlalchemy.orm import sessionmaker, relationship
 Base = declarative_base()
 
 
+def utcnow():
+    """Return current UTC time."""
+    return datetime.utcnow()
+
+
 class Camera(Base):
     """Camera configuration and information."""
 
@@ -38,8 +43,8 @@ class Camera(Base):
     username = Column(String(100))
     stream_profile = Column(Integer, default=0)
     active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
     # Relationships
     detections = relationship("Detection", back_populates="camera")
@@ -60,7 +65,7 @@ class Detection(Base):
     bbox_x2 = Column(Integer)
     bbox_y2 = Column(Integer)
     matched_pattern = Column(String(200))
-    timestamp = Column(DateTime, default=datetime.utcnow)
+    timestamp = Column(DateTime, default=utcnow)
 
     # Relationships
     camera = relationship("Camera", back_populates="detections")
@@ -80,7 +85,7 @@ class Alert(Base):
     sent = Column(Boolean, default=False)
     sent_at = Column(DateTime)
     error_message = Column(Text)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
     # Relationships
     detection = relationship("Detection", back_populates="alerts")
@@ -340,12 +345,13 @@ class DatabaseManager:
                 query = query.filter_by(camera_id=camera_id)
 
             total = query.count()
-            avg_confidence = (
-                session.query(Detection.confidence).filter(Detection.confidence > 0).all()
-            )
+
+            # Use the same filtered query for confidence
+            avg_query = query.filter(Detection.confidence > 0)
+            avg_confidence = [d.confidence for d in avg_query.all()]
 
             if avg_confidence:
-                avg = sum(c[0] for c in avg_confidence) / len(avg_confidence)
+                avg = sum(avg_confidence) / len(avg_confidence)
             else:
                 avg = 0.0
 
