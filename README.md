@@ -6,6 +6,8 @@ A comprehensive TensorFlow-based application template for performing OCR (Optica
 
 - 🎥 **ONVIF Camera Support**: Connect to any ONVIF-compliant IP camera
 - 🔍 **Multiple OCR Engines**: Choose between Tesseract and EasyOCR
+- 🎯 **EAST Text Detection**: Optional text region detection for improved accuracy
+- 🖼️ **Advanced Preprocessing**: De-skewing, normalization, and illumination correction
 - 🤖 **TensorFlow Integration**: Support for custom TensorFlow models
 - 📊 **Real-time Processing**: Process video streams in real-time
 - 💾 **Configurable Output**: Save detected text and annotated frames
@@ -269,6 +271,51 @@ The web interface will be available at `http://localhost:5000`.
 The API supports Cross-Origin Resource Sharing (CORS), allowing integration with external web applications and services.
 
 ## Advanced Usage
+
+### EAST Text Detection for Improved Accuracy
+
+Enable EAST (Efficient and Accurate Scene Text) detector for better text recognition:
+
+1. Download the EAST model:
+```bash
+wget https://github.com/oyyd/frozen-east-text-detection.pb/raw/master/frozen_east_text_detection.pb \
+     -O models/frozen_east_text_detection.pb
+```
+
+2. Enable in `config.yaml`:
+```yaml
+ocr:
+  use_text_detection: true
+  text_detection:
+    east_model_path: "./models/frozen_east_text_detection.pb"
+    confidence_threshold: 0.5
+    nms_threshold: 0.4
+    input_width: 320
+    input_height: 320
+    region_padding: 5
+  preprocessing:
+    apply_deskewing: true
+    apply_illumination_normalization: true
+```
+
+Benefits:
+- Detects text regions before OCR
+- Handles multiple text orientations
+- Improves accuracy on complex scenes
+- Reduces false positives
+
+### Advanced Image Preprocessing
+
+Configure preprocessing options for better OCR accuracy:
+
+```yaml
+ocr:
+  preprocessing:
+    apply_deskewing: true              # Correct rotation
+    apply_contrast_enhancement: false  # Enhance contrast (optional)
+    apply_noise_removal: false         # Remove noise (optional)
+    apply_illumination_normalization: true  # Normalize lighting
+```
 
 ### Custom TensorFlow Models
 
