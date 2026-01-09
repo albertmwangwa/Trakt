@@ -25,5 +25,8 @@ coloredlogs>=15.0
 flask>=3.0.0
 flask-cors>=4.0.0
 
+# Database support
+sqlalchemy>=2.0.0
+
 # Optional: For GPU support (uncomment if needed)
 # tensorflow-gpu>=2.13.0
