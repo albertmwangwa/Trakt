@@ -146,5 +146,15 @@ if __name__ == "__main__":
     # Allow host configuration via environment variable for production deployments
     # Default is 127.0.0.1 (localhost only) for security
     host = os.environ.get("FLASK_HOST", "127.0.0.1")
-    port = int(os.environ.get("FLASK_PORT", "5000"))
+
+    # Validate port is numeric and within valid range
+    try:
+        port = int(os.environ.get("FLASK_PORT", "5000"))
+        if not (1 <= port <= 65535):
+            logger.warning(f"Invalid port {port}, using default 5000")
+            port = 5000
+    except ValueError:
+        logger.warning(f"Invalid FLASK_PORT value, using default 5000")
+        port = 5000
+
     run_server(host=host, port=port, debug=debug_mode)
