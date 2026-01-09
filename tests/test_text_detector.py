@@ -137,7 +137,7 @@ class TestEASTTextDetector(unittest.TestCase):
         """Test NMS with empty boxes."""
         detector = EASTTextDetector(config=self.config)
 
-        result = detector._apply_nms([], 0.4)
+        result = detector._apply_nms([], [], 0.4)
 
         self.assertEqual(result, [])
 
@@ -145,8 +145,9 @@ class TestEASTTextDetector(unittest.TestCase):
         """Test NMS with boxes."""
         detector = EASTTextDetector(config=self.config)
         boxes = [(10, 10, 50, 50), (15, 15, 55, 55), (100, 100, 150, 150)]
+        confidences = [0.9, 0.8, 0.95]
 
-        result = detector._apply_nms(boxes, 0.4)
+        result = detector._apply_nms(boxes, confidences, 0.4)
 
         # Should return filtered boxes
         self.assertIsInstance(result, list)
@@ -160,10 +161,12 @@ class TestEASTTextDetector(unittest.TestCase):
         scores = np.random.rand(1, 1, 80, 80).astype(np.float32)
         geometry = np.random.rand(1, 5, 80, 80).astype(np.float32)
 
-        result = detector._decode_predictions(scores, geometry, 0.9)
+        boxes, confidences = detector._decode_predictions(scores, geometry, 0.9)
 
-        # Should return list of boxes (may be empty due to random data)
-        self.assertIsInstance(result, list)
+        # Should return tuple of boxes and confidences
+        self.assertIsInstance(boxes, list)
+        self.assertIsInstance(confidences, list)
+        self.assertEqual(len(boxes), len(confidences))
 
 
 if __name__ == "__main__":

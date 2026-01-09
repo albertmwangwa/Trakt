@@ -47,7 +47,7 @@ class EASTTextDetector:
                 self.logger.warning(
                     f"EAST model not found at {self.model_path}. "
                     "Please download from: "
-                    "https://github.com/argman/EAST/blob/master/frozen_east_text_detection.pb"
+                    "https://github.com/oyyd/frozen-east-text-detection.pb/raw/master/frozen_east_text_detection.pb"
                 )
                 return
 
@@ -91,10 +91,10 @@ class EASTTextDetector:
         (scores, geometry) = self.net.forward(["feature_fusion/Conv_7/Sigmoid", "feature_fusion/concat_3"])
 
         # Decode predictions
-        boxes = self._decode_predictions(scores, geometry, self.confidence_threshold)
+        boxes, confidences = self._decode_predictions(scores, geometry, self.confidence_threshold)
 
         # Apply Non-Maximum Suppression
-        boxes = self._apply_nms(boxes, self.nms_threshold)
+        boxes = self._apply_nms(boxes, confidences, self.nms_threshold)
 
         # Scale boxes back to original image size
         scaled_boxes = []
@@ -109,7 +109,7 @@ class EASTTextDetector:
 
     def _decode_predictions(
         self, scores: np.ndarray, geometry: np.ndarray, min_confidence: float
-    ) -> List[Tuple[int, int, int, int]]:
+    ) -> Tuple[List[Tuple[int, int, int, int]], List[float]]:
         """
         Decode predictions from EAST model output.
 
@@ -119,7 +119,7 @@ class EASTTextDetector:
             min_confidence: Minimum confidence threshold
 
         Returns:
-            List of bounding boxes
+            Tuple of (bounding boxes, confidence scores)
         """
         (numRows, numCols) = scores.shape[2:4]
         boxes = []
@@ -158,18 +158,19 @@ class EASTTextDetector:
                 startY = int(endY - h)
 
                 boxes.append((startX, startY, endX, endY))
-                confidences.append(scoresData[x])
+                confidences.append(float(scoresData[x]))
 
-        return boxes
+        return boxes, confidences
 
     def _apply_nms(
-        self, boxes: List[Tuple[int, int, int, int]], threshold: float
+        self, boxes: List[Tuple[int, int, int, int]], confidences: List[float], threshold: float
     ) -> List[Tuple[int, int, int, int]]:
         """
         Apply Non-Maximum Suppression to remove overlapping boxes.
 
         Args:
             boxes: List of bounding boxes
+            confidences: List of confidence scores for each box
             threshold: IoU threshold for NMS
 
         Returns:
@@ -184,7 +185,7 @@ class EASTTextDetector:
         # Apply NMS using OpenCV
         indices = cv2.dnn.NMSBoxes(
             boxes_array.tolist(),
-            [1.0] * len(boxes),  # Use constant confidence
+            confidences,
             self.confidence_threshold,
             threshold,
         )
