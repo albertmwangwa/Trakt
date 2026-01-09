@@ -7,7 +7,7 @@ This module provides utilities for training custom TensorFlow models for OCR.
 import logging
 import os
 from datetime import datetime
-from typing import List, Tuple, Optional
+from typing import Tuple
 
 import cv2
 import numpy as np
@@ -378,13 +378,13 @@ def main():
         batch_size=config['batch_size'],
         image_size=config['input_shape'][:2]
     )
-    
+
     # Load datasets
     print("Loading training data...")
     train_images, train_labels = data_gen.load_dataset('train')
     val_images, val_labels = data_gen.load_dataset('val')
     test_images, test_labels = data_gen.load_dataset('test')
-    
+
     # Build model
     builder = ModelBuilder(config)
     if config['model_type'] == 'cnn':
@@ -397,9 +397,9 @@ def main():
             input_shape=config['input_shape'],
             num_classes=config['num_classes']
         )
-    
+
     print(model.summary())
-    
+
     # Train model
     trainer = ModelTrainer(config)
     history = trainer.train(
@@ -410,7 +410,7 @@ def main():
         batch_size=config['batch_size'],
         save_path=config['save_path']
     )
-    
+
     # Evaluate model
     results = trainer.evaluate(model, (test_images, test_labels))
     print(f"Final test accuracy: {results['accuracy']:.4f}")

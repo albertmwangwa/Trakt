@@ -11,7 +11,7 @@ import re
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from typing import Dict, List, Optional
+from typing import Dict, List
 from datetime import datetime
 
 import requests
@@ -200,12 +200,12 @@ class AlertManager:
 
         body = f"""
         Alert Notification from Trakt OCR System
-        
+
         Pattern Matched: {alert_data['pattern']}
         Detected Text: {alert_data['text']}
         Camera: {alert_data.get('camera', 'Unknown')}
         Timestamp: {alert_data['timestamp']}
-        
+
         This is an automated alert from your Trakt OCR monitoring system.
         """
 
