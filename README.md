@@ -353,6 +353,265 @@ python main.py --config camera1_config.yaml &
 python main.py --config camera2_config.yaml &
 ```
 
+#### Native Multi-Camera Mode (Recommended)
+
+Trakt now supports native multi-camera processing in a single application instance:
+
+1. Enable multi-camera mode in `config.yaml`:
+
+```yaml
+app:
+  multi_camera_mode: true
+
+# Define multiple cameras
+cameras:
+  - name: "Front_Entrance"
+    host: "192.168.1.100"
+    port: 80
+    username: "admin"
+    password: "password"
+    stream_profile: 0
+    transport: "tcp"
+    fps_limit: 5
+  - name: "Back_Entrance"
+    host: "192.168.1.101"
+    port: 80
+    username: "admin"
+    password: "password"
+    stream_profile: 0
+    transport: "tcp"
+    fps_limit: 5
+  - name: "Parking_Lot"
+    host: "192.168.1.102"
+    port: 80
+    username: "admin"
+    password: "password"
+    stream_profile: 1  # Use sub-stream for lower bandwidth
+    transport: "tcp"
+    fps_limit: 3
+```
+
+2. Run the application:
+
+```bash
+python main.py
+```
+
+All cameras will run concurrently in separate threads, with independent OCR processing.
+
+### Database Integration
+
+Trakt now includes built-in database support for storing OCR results, camera information, and alert history.
+
+#### Configuration
+
+Enable database in `config.yaml`:
+
+```yaml
+database:
+  enabled: true
+  url: "sqlite:///./output/trakt.db"  # SQLite (default)
+  # Or use PostgreSQL: "postgresql://user:password@localhost/trakt"
+  # Or use MySQL: "mysql://user:password@localhost/trakt"
+```
+
+#### Features
+
+- **Automatic schema creation**: Database tables are created automatically
+- **Camera tracking**: Store information about all configured cameras
+- **Detection storage**: All OCR detections are saved with timestamps, confidence scores, and bounding boxes
+- **Alert history**: Track all alerts triggered by pattern matches
+- **Query capabilities**: Retrieve recent detections, statistics, and historical data
+
+#### Querying Data
+
+Access the database programmatically:
+
+```python
+from src.database import DatabaseManager
+
+db = DatabaseManager("sqlite:///./output/trakt.db")
+
+# Get recent detections
+detections = db.get_recent_detections(limit=100)
+
+# Get statistics
+stats = db.get_detection_stats()
+print(f"Total detections: {stats['total_detections']}")
+print(f"Average confidence: {stats['average_confidence']:.2f}")
+
+# Get active cameras
+cameras = db.get_active_cameras()
+```
+
+### Alert System
+
+Configure alerts to be notified when specific text patterns are detected.
+
+#### Configuration
+
+Enable and configure alerts in `config.yaml`:
+
+```yaml
+alerts:
+  enabled: true
+  
+  # Define patterns to trigger alerts (regex)
+  patterns:
+    - pattern: "[A-Z]{3}[0-9]{3}"
+      name: "license_plate"
+    - pattern: "EMERGENCY|ALERT|WARNING"
+      name: "emergency_text"
+    - pattern: "[0-9]{3}-[0-9]{3}-[0-9]{4}"
+      name: "phone_number"
+  
+  # Alert types
+  alert_types:
+    - "log"      # Log to console/file (always available)
+    - "email"    # Send email notification
+    - "webhook"  # HTTP webhook notification
+  
+  # Cooldown to prevent spam (seconds)
+  cooldown_seconds: 60
+```
+
+#### Email Alerts
+
+Configure email notifications:
+
+```yaml
+alerts:
+  email:
+    enabled: true
+    smtp_server: "smtp.gmail.com"
+    smtp_port: 587
+    username: "your-email@gmail.com"
+    password: "your-app-password"  # Use app-specific password
+    from_email: "your-email@gmail.com"
+    to_emails:
+      - "recipient1@example.com"
+      - "recipient2@example.com"
+```
+
+#### Webhook Alerts
+
+Send alerts to external services:
+
+```yaml
+alerts:
+  webhook:
+    enabled: true
+    url: "https://your-server.com/alerts"
+    method: "POST"
+    headers:
+      Content-Type: "application/json"
+      Authorization: "Bearer your-token"
+    timeout: 10
+```
+
+The webhook will receive JSON data:
+
+```json
+{
+  "text": "ABC123",
+  "pattern": "license_plate",
+  "camera": "Front_Entrance",
+  "timestamp": "2026-01-09T12:00:00"
+}
+```
+
+### TensorFlow Model Training
+
+Trakt includes utilities for training custom OCR models.
+
+#### Training Script
+
+Use the provided training script template:
+
+```bash
+python examples/train_model.py
+```
+
+#### Data Format
+
+Organize training data as follows:
+
+```
+training_data/
+├── train/
+│   ├── class1/
+│   │   ├── image1.jpg
+│   │   ├── image2.jpg
+│   └── class2/
+│       ├── image1.jpg
+│       ├── image2.jpg
+├── val/
+│   ├── class1/
+│   └── class2/
+└── test/
+    ├── class1/
+    └── class2/
+```
+
+#### Custom Training
+
+Create your own training script:
+
+```python
+from src.model_trainer import ModelBuilder, ModelTrainer, DataGenerator
+
+# Configure
+config = {
+    'data_dir': './training_data',
+    'model_type': 'cnn',  # or 'crnn'
+    'input_shape': (224, 224, 3),
+    'num_classes': 36,
+    'batch_size': 32,
+    'epochs': 50,
+}
+
+# Load data
+data_gen = DataGenerator(
+    data_dir=config['data_dir'],
+    batch_size=config['batch_size'],
+    image_size=config['input_shape'][:2]
+)
+
+train_images, train_labels = data_gen.load_dataset('train')
+val_images, val_labels = data_gen.load_dataset('val')
+
+# Build model
+builder = ModelBuilder(config)
+model = builder.build_cnn_model(
+    input_shape=config['input_shape'],
+    num_classes=config['num_classes']
+)
+
+# Train
+trainer = ModelTrainer(config)
+history = trainer.train(
+    model=model,
+    train_data=(train_images, train_labels),
+    val_data=(val_images, val_labels),
+    epochs=config['epochs'],
+    save_path='./models/my_model.h5'
+)
+
+# Evaluate
+results = trainer.evaluate(model, (test_images, test_labels))
+```
+
+#### Using Custom Models
+
+Update `config.yaml` to use your trained model:
+
+```yaml
+tensorflow:
+  model_path: "./models/my_model.h5"
+  use_pretrained: true
+  input_shape: [224, 224, 3]
+```
+
 ### Real-time Preview
 
 Enable live preview window:
@@ -447,7 +706,7 @@ For issues, questions, or contributions, please open an issue on GitHub.
 
 - [x] Web interface for configuration and monitoring
 - [x] REST API for integration with other systems
-- [ ] Support for multiple simultaneous cameras
-- [ ] Database integration for results storage
-- [ ] Alert system for specific text patterns
-- [ ] Enhanced TensorFlow model training utilities
+- [x] Support for multiple simultaneous cameras
+- [x] Database integration for results storage
+- [x] Alert system for specific text patterns
+- [x] Enhanced TensorFlow model training utilities

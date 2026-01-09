@@ -4,8 +4,12 @@ Tests for Database Module
 
 import unittest
 import os
+import sys
 import tempfile
 from datetime import datetime
+
+# Add src to path to import database module directly
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from src.database import DatabaseManager, Camera, Detection, Alert
 
