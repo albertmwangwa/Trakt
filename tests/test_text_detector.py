@@ -2,12 +2,19 @@
 Tests for Text Detection Module
 """
 
+import sys
+import os
 import unittest
 from unittest.mock import Mock, patch
 
+# Add src to path to import text_detector directly without __init__.py
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+
 import numpy as np
 
-from src.text_detector import EASTTextDetector, TextRegionPreprocessor
+# Import directly from the module file bypassing __init__.py
+import text_detector
+from text_detector import EASTTextDetector, TextRegionPreprocessor
 
 
 class TestTextRegionPreprocessor(unittest.TestCase):
