@@ -1,4 +1,6 @@
 # Camera configuration
+# For single camera mode, use 'camera' configuration
+# For multi-camera mode, use 'cameras' configuration (list)
 camera:
   # ONVIF camera connection settings
   host: "192.168.1.100"  # Camera IP address
@@ -15,6 +17,26 @@ camera:
   resolution:
     width: 1920
     height: 1080
+
+# Multi-camera configuration (optional)
+# Uncomment and configure to use multiple cameras simultaneously
+# cameras:
+#   - name: "Front_Entrance"
+#     host: "192.168.1.100"
+#     port: 80
+#     username: "admin"
+#     password: "password"
+#     stream_profile: 0
+#     transport: "tcp"
+#     fps_limit: 5
+#   - name: "Back_Entrance"
+#     host: "192.168.1.101"
+#     port: 80
+#     username: "admin"
+#     password: "password"
+#     stream_profile: 0
+#     transport: "tcp"
+#     fps_limit: 5
 
 # OCR configuration
 ocr:
@@ -93,6 +115,9 @@ output:
 
 # Application settings
 app:
+  # Multi-camera mode
+  multi_camera_mode: false  # Set to true to use 'cameras' configuration
+  
   # Reconnection settings
   reconnect_attempts: 5
   reconnect_delay: 5     # seconds
@@ -104,3 +129,52 @@ app:
   # Display
   show_preview: false    # Show live preview window
   preview_scale: 0.5     # Scale factor for preview window
+
+# Database configuration
+database:
+  enabled: true
+  url: "sqlite:///./output/trakt.db"  # SQLite database file
+  # For PostgreSQL: "postgresql://user:password@localhost/trakt"
+  # For MySQL: "mysql://user:password@localhost/trakt"
+
+# Alert system configuration
+alerts:
+  enabled: false  # Enable alert system
+  
+  # Alert patterns (regex patterns to trigger alerts)
+  patterns:
+    - pattern: "[A-Z]{3}[0-9]{3}"  # License plate pattern
+      name: "license_plate"
+    - pattern: "EMERGENCY|ALERT|WARNING"
+      name: "emergency_text"
+    - pattern: "[0-9]{3}-[0-9]{3}-[0-9]{4}"
+      name: "phone_number"
+  
+  # Alert types to trigger
+  alert_types:
+    - "log"      # Log to console/file
+    # - "email"  # Send email
+    # - "webhook"  # Send to webhook
+  
+  # Cooldown period to prevent spam (seconds)
+  cooldown_seconds: 60
+  
+  # Email configuration (if email alerts enabled)
+  email:
+    enabled: false
+    smtp_server: "smtp.gmail.com"
+    smtp_port: 587
+    username: "your-email@gmail.com"
+    password: "your-app-password"
+    from_email: "your-email@gmail.com"
+    to_emails:
+      - "recipient@example.com"
+  
+  # Webhook configuration (if webhook alerts enabled)
+  webhook:
+    enabled: false
+    url: "https://your-webhook-url.com/alerts"
+    method: "POST"  # POST or GET
+    headers:
+      Content-Type: "application/json"
+    timeout: 10
