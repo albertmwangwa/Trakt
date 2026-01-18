@@ -18,6 +18,9 @@ import yaml
 
 from src.camera_handler import ONVIFCameraHandler
 from src.ocr_engine import OCREngine, TensorFlowOCRModel
+from src.database import DatabaseManager
+from src.alerts import AlertManager
+from src.multi_camera import MultiCameraManager, CameraConfig
 
 
 class TraktOCRApp:
@@ -38,6 +41,9 @@ class TraktOCRApp:
         self.camera = None
         self.ocr_engine = None
         self.tf_model = None
+        self.database = None
+        self.alert_manager = None
+        self.multi_camera_manager = None
 
         # Runtime state
         self.running = False
@@ -46,6 +52,10 @@ class TraktOCRApp:
 
         # Create output directories
         self._create_output_dirs()
+
+        # Initialize database and alerts
+        self._initialize_database()
+        self._initialize_alerts()
 
     def _load_config(self, config_path: str) -> dict:
         """Load configuration from YAML file."""
@@ -90,6 +100,20 @@ class TraktOCRApp:
             os.makedirs(
                 output_config.get("frames_dir", "./output/frames"), exist_ok=True
             )
+
+    def _initialize_database(self):
+        """Initialize database if configured."""
+        db_config = self.config.get("database", {})
+        if db_config.get("enabled", False):
+            self.database = DatabaseManager(db_config)
+            self.logger.info("Database initialized")
+
+    def _initialize_alerts(self):
+        """Initialize alert system if configured."""
+        alerts_config = self.config.get("alerts", {})
+        if alerts_config.get("enabled", False):
+            self.alert_manager = AlertManager(alerts_config, self.database)
+            self.logger.info("Alert system initialized")
 
     def initialize_camera(self) -> bool:
         """
@@ -154,12 +178,66 @@ class TraktOCRApp:
         else:
             self.logger.warning("TensorFlow model path not found")
 
-    def process_frame(self, frame):
+    def initialize_multi_camera(self) -> bool:
+        """
+        Initialize multi-camera manager if configured.
+
+        Returns:
+            True if multi-camera mode is enabled and initialized
+        """
+        cameras_config = self.config.get("cameras", {})
+
+        if not cameras_config.get("enabled", False):
+            return False
+
+        cameras_list = cameras_config.get("list", [])
+        if not cameras_list:
+            self.logger.warning("Multi-camera mode enabled but no cameras configured")
+            return False
+
+        self.logger.info("Initializing multi-camera manager...")
+
+        # Initialize OCR engine first
+        self.initialize_ocr()
+
+        # Create multi-camera manager
+        self.multi_camera_manager = MultiCameraManager(
+            ocr_engine=self.ocr_engine,
+            database=self.database,
+            alert_manager=self.alert_manager,
+            detection_callback=self._on_multi_camera_detection,
+        )
+
+        # Add cameras from config
+        count = self.multi_camera_manager.add_cameras_from_config(cameras_list)
+        self.logger.info(f"Added {count} cameras to multi-camera manager")
+
+        return count > 0
+
+    def _on_multi_camera_detection(
+        self, camera_id: str, detections: list, frame_number: int
+    ):
+        """Callback for multi-camera detections."""
+        if detections:
+            self.detection_count += len(detections)
+            self.logger.info(
+                f"Camera {camera_id} Frame {frame_number}: "
+                f"Detected {len(detections)} text regions"
+            )
+
+            for result in detections:
+                self.logger.debug(
+                    f"  [{camera_id}] Text: '{result['text']}' "
+                    f"(confidence: {result['confidence']:.2f})"
+                )
+
+    def process_frame(self, frame, camera_id: str = "default"):
         """
         Process a single frame for OCR.
 
         Args:
             frame: Input frame from camera
+            camera_id: Camera identifier
         """
         self.frame_count += 1
 
@@ -179,13 +257,25 @@ class TraktOCRApp:
                     f"(confidence: {result['confidence']:.2f})"
                 )
 
-            # Save results
-            self._save_results(results)
+            # Save to database
+            if self.database:
+                self.database.save_detections_batch(
+                    camera_id, results, self.frame_count
+                )
+
+            # Check for alerts
+            if self.alert_manager:
+                self.alert_manager.check_and_alert(
+                    camera_id, results, self.frame_count
+                )
+
+            # Save results to file
+            self._save_results(results, camera_id)
 
             # Annotate and save frame
             if self.config.get("output", {}).get("save_frames"):
                 annotated = self.ocr_engine.annotate_frame(frame, results)
-                self._save_frame(annotated)
+                self._save_frame(annotated, camera_id)
 
         # Show preview if enabled
         if self.config.get("app", {}).get("show_preview"):
@@ -197,7 +287,7 @@ class TraktOCRApp:
             if cv2.waitKey(1) & 0xFF == ord("q"):
                 self.running = False
 
-    def _save_results(self, results):
+    def _save_results(self, results, camera_id: str = "default"):
         """Save OCR results to file."""
         output_config = self.config.get("output", {})
 
@@ -206,9 +296,10 @@ class TraktOCRApp:
 
         results_dir = output_config.get("results_dir", "./output/results")
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"{results_dir}/results_{timestamp}.json"
+        filename = f"{results_dir}/results_{camera_id}_{timestamp}.json"
 
         data = {
+            "camera_id": camera_id,
             "timestamp": timestamp,
             "frame_number": self.frame_count,
             "detections": results,
@@ -217,7 +308,7 @@ class TraktOCRApp:
         with open(filename, "w") as f:
             json.dump(data, f, indent=2)
 
-    def _save_frame(self, frame):
+    def _save_frame(self, frame, camera_id: str = "default"):
         """Save annotated frame."""
         output_config = self.config.get("output", {})
         save_interval = output_config.get("save_interval", 30)
@@ -227,7 +318,7 @@ class TraktOCRApp:
 
         frames_dir = output_config.get("frames_dir", "./output/frames")
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"{frames_dir}/frame_{self.frame_count}_{timestamp}.jpg"
+        filename = f"{frames_dir}/frame_{camera_id}_{self.frame_count}_{timestamp}.jpg"
 
         cv2.imwrite(filename, frame)
         self.logger.debug(f"Saved frame: {filename}")
@@ -237,43 +328,11 @@ class TraktOCRApp:
         self.logger.info("Starting Trakt OCR Application")
 
         try:
-            # Initialize camera
-            if not self.initialize_camera():
-                self.logger.error("Failed to initialize camera")
-                return
-
-            # Initialize OCR
-            self.initialize_ocr()
-
-            # Initialize TensorFlow model (optional)
-            self.initialize_tensorflow_model()
-
-            # Main processing loop
-            self.running = True
-            camera_config = self.config.get("camera", {})
-            fps_limit = camera_config.get("fps_limit", 5)
-            frame_delay = 1.0 / fps_limit if fps_limit > 0 else 0
-
-            self.logger.info("Starting main processing loop...")
-
-            while self.running:
-                start_time = time.time()
-
-                # Read frame
-                ret, frame = self.camera.read_frame()
-
-                if not ret or frame is None:
-                    self.logger.warning("Failed to read frame")
-                    time.sleep(1)
-                    continue
-
-                # Process frame
-                self.process_frame(frame)
-
-                # Maintain FPS limit
-                elapsed = time.time() - start_time
-                if elapsed < frame_delay:
-                    time.sleep(frame_delay - elapsed)
+            # Check if multi-camera mode is enabled
+            if self.initialize_multi_camera():
+                self._run_multi_camera()
+            else:
+                self._run_single_camera()
 
         except KeyboardInterrupt:
             self.logger.info("Received interrupt signal")
@@ -282,12 +341,105 @@ class TraktOCRApp:
         finally:
             self.cleanup()
 
+    def _run_multi_camera(self):
+        """Run in multi-camera mode."""
+        self.logger.info("Running in multi-camera mode")
+
+        # Initialize TensorFlow model (optional)
+        self.initialize_tensorflow_model()
+
+        # Start all cameras
+        started = self.multi_camera_manager.start_all()
+        if started == 0:
+            self.logger.error("Failed to start any cameras")
+            return
+
+        self.running = True
+        self.logger.info(f"Started {started} cameras, waiting for processing...")
+
+        # Keep running until interrupted
+        while self.running:
+            try:
+                time.sleep(1)
+
+                # Log statistics periodically
+                stats = self.multi_camera_manager.get_statistics()
+                self.logger.debug(
+                    f"Stats: {stats['running_cameras']} cameras, "
+                    f"{stats['total_frames']} frames, "
+                    f"{stats['total_detections']} detections"
+                )
+            except KeyboardInterrupt:
+                break
+
+    def _run_single_camera(self):
+        """Run in single camera mode (legacy)."""
+        self.logger.info("Running in single camera mode")
+
+        # Initialize camera
+        if not self.initialize_camera():
+            self.logger.error("Failed to initialize camera")
+            return
+
+        # Initialize OCR
+        self.initialize_ocr()
+
+        # Initialize TensorFlow model (optional)
+        self.initialize_tensorflow_model()
+
+        # Start database session
+        session_id = None
+        if self.database:
+            session_id = self.database.start_camera_session("default")
+
+        # Main processing loop
+        self.running = True
+        camera_config = self.config.get("camera", {})
+        fps_limit = camera_config.get("fps_limit", 5)
+        frame_delay = 1.0 / fps_limit if fps_limit > 0 else 0
+
+        self.logger.info("Starting main processing loop...")
+
+        while self.running:
+            start_time = time.time()
+
+            # Read frame
+            ret, frame = self.camera.read_frame()
+
+            if not ret or frame is None:
+                self.logger.warning("Failed to read frame")
+                time.sleep(1)
+                continue
+
+            # Process frame
+            self.process_frame(frame)
+
+            # Maintain FPS limit
+            elapsed = time.time() - start_time
+            if elapsed < frame_delay:
+                time.sleep(frame_delay - elapsed)
+
+        # End database session
+        if self.database and session_id:
+            self.database.end_camera_session(
+                session_id, self.frame_count, self.detection_count
+            )
+
     def cleanup(self):
         """Cleanup resources."""
         self.logger.info("Cleaning up resources...")
 
+        # Stop multi-camera manager
+        if self.multi_camera_manager:
+            self.multi_camera_manager.stop_all()
+
+        # Release single camera
         if self.camera:
             self.camera.release()
+
+        # Close database
+        if self.database:
+            self.database.close()
 
         cv2.destroyAllWindows()
 

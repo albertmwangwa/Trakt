@@ -27,8 +27,32 @@ app_state = {
     "detection_count": 0,
     "last_update": None,
     "camera_info": None,
+    "cameras": {},
     "recent_detections": [],
 }
+
+# Database and Alert manager instances (set externally)
+_database = None
+_alert_manager = None
+_multi_camera_manager = None
+
+
+def set_database(db):
+    """Set the database manager instance."""
+    global _database
+    _database = db
+
+
+def set_alert_manager(am):
+    """Set the alert manager instance."""
+    global _alert_manager
+    _alert_manager = am
+
+
+def set_multi_camera_manager(mcm):
+    """Set the multi-camera manager instance."""
+    global _multi_camera_manager
+    _multi_camera_manager = mcm
 
 
 @app.route("/")
@@ -40,24 +64,33 @@ def index():
 @app.route("/api/status")
 def get_status():
     """Get application status."""
-    return jsonify(
-        {
-            "success": True,
-            "data": {
-                "status": app_state["status"],
-                "frame_count": app_state["frame_count"],
-                "detection_count": app_state["detection_count"],
-                "last_update": app_state["last_update"],
-                "camera_info": app_state["camera_info"],
-            },
-        }
-    )
+    data = {
+        "status": app_state["status"],
+        "frame_count": app_state["frame_count"],
+        "detection_count": app_state["detection_count"],
+        "last_update": app_state["last_update"],
+        "camera_info": app_state["camera_info"],
+    }
+
+    # Add multi-camera status if available
+    if _multi_camera_manager:
+        data["cameras"] = _multi_camera_manager.get_statistics()
+
+    return jsonify({"success": True, "data": data})
 
 
 @app.route("/api/detections")
 def get_detections():
     """Get recent OCR detections."""
     limit = request.args.get("limit", 50, type=int)
+    camera_id = request.args.get("camera_id")
+
+    # Try database first
+    if _database:
+        detections = _database.get_detections(camera_id=camera_id, limit=limit)
+        return jsonify({"success": True, "data": detections, "count": len(detections)})
+
+    # Fall back to in-memory state
     detections = app_state["recent_detections"][-limit:]
     return jsonify({"success": True, "data": detections, "count": len(detections)})
 
@@ -66,6 +99,29 @@ def get_detections():
 def get_camera_info():
     """Get camera information."""
     return jsonify({"success": True, "data": app_state["camera_info"]})
+
+
+@app.route("/api/cameras")
+def get_cameras():
+    """Get all cameras status."""
+    if _multi_camera_manager:
+        cameras = _multi_camera_manager.get_camera_status()
+        return jsonify({"success": True, "data": cameras})
+
+    # Single camera mode
+    return jsonify({"success": True, "data": {"default": app_state["camera_info"]}})
+
+
+@app.route("/api/cameras/<camera_id>")
+def get_camera(camera_id):
+    """Get specific camera status."""
+    if _multi_camera_manager:
+        status = _multi_camera_manager.get_camera_status(camera_id)
+        if status:
+            return jsonify({"success": True, "data": status})
+        return jsonify({"success": False, "error": "Camera not found"}), 404
+
+    return jsonify({"success": False, "error": "Multi-camera mode not enabled"}), 400
 
 
 @app.route("/api/results")
@@ -100,6 +156,109 @@ def health_check():
     return jsonify(
         {"success": True, "status": "healthy", "timestamp": datetime.now().isoformat()}
     )
+
+
+# Database endpoints
+@app.route("/api/database/detections")
+def get_database_detections():
+    """Get detections from database."""
+    if not _database:
+        return jsonify({"success": False, "error": "Database not enabled"}), 400
+
+    camera_id = request.args.get("camera_id")
+    start_time = request.args.get("start_time")
+    end_time = request.args.get("end_time")
+    limit = request.args.get("limit", 100, type=int)
+    offset = request.args.get("offset", 0, type=int)
+
+    detections = _database.get_detections(
+        camera_id=camera_id,
+        start_time=start_time,
+        end_time=end_time,
+        limit=limit,
+        offset=offset,
+    )
+    return jsonify({"success": True, "data": detections, "count": len(detections)})
+
+
+@app.route("/api/database/statistics")
+def get_database_statistics():
+    """Get database statistics."""
+    if not _database:
+        return jsonify({"success": False, "error": "Database not enabled"}), 400
+
+    camera_id = request.args.get("camera_id")
+    stats = _database.get_statistics(camera_id=camera_id)
+    return jsonify({"success": True, "data": stats})
+
+
+# Alert endpoints
+@app.route("/api/alerts")
+def get_alerts():
+    """Get alerts from the system."""
+    if not _alert_manager:
+        return jsonify({"success": False, "error": "Alert system not enabled"}), 400
+
+    if _database:
+        camera_id = request.args.get("camera_id")
+        status = request.args.get("status")
+        limit = request.args.get("limit", 100, type=int)
+        offset = request.args.get("offset", 0, type=int)
+
+        alerts = _database.get_alerts(
+            camera_id=camera_id, status=status, limit=limit, offset=offset
+        )
+        return jsonify({"success": True, "data": alerts, "count": len(alerts)})
+
+    # Fall back to recent alerts from alert manager
+    alerts = _alert_manager.get_recent_alerts(limit=50)
+    return jsonify({"success": True, "data": alerts, "count": len(alerts)})
+
+
+@app.route("/api/alerts/<int:alert_id>/status", methods=["POST"])
+def update_alert_status(alert_id):
+    """Update alert status."""
+    if not _database:
+        return jsonify({"success": False, "error": "Database not enabled"}), 400
+
+    data = request.get_json()
+    if not data or "status" not in data:
+        return jsonify({"success": False, "error": "Status is required"}), 400
+
+    status = data["status"]
+    if status not in ["pending", "acknowledged", "resolved", "dismissed"]:
+        return jsonify({"success": False, "error": "Invalid status"}), 400
+
+    success = _database.update_alert_status(alert_id, status)
+    if success:
+        return jsonify({"success": True, "message": "Alert status updated"})
+    return jsonify({"success": False, "error": "Alert not found"}), 404
+
+
+@app.route("/api/alerts/patterns")
+def get_alert_patterns():
+    """Get configured alert patterns."""
+    if not _alert_manager:
+        return jsonify({"success": False, "error": "Alert system not enabled"}), 400
+
+    patterns = _alert_manager.get_patterns()
+    return jsonify({"success": True, "data": patterns, "count": len(patterns)})
+
+
+@app.route("/api/alerts/patterns/<name>/enabled", methods=["POST"])
+def set_pattern_enabled(name):
+    """Enable or disable an alert pattern."""
+    if not _alert_manager:
+        return jsonify({"success": False, "error": "Alert system not enabled"}), 400
+
+    data = request.get_json()
+    if not data or "enabled" not in data:
+        return jsonify({"success": False, "error": "Enabled flag is required"}), 400
+
+    success = _alert_manager.set_pattern_enabled(name, data["enabled"])
+    if success:
+        return jsonify({"success": True, "message": "Pattern updated"})
+    return jsonify({"success": False, "error": "Pattern not found"}), 404
 
 
 def update_state(
