@@ -12,8 +12,8 @@ import threading
 from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Callable, Dict, List, Optional
-from urllib.request import urlopen, Request
-from urllib.error import URLError
+
+import requests
 
 
 class AlertHandler(ABC):
@@ -79,29 +79,32 @@ class WebhookAlertHandler(AlertHandler):
     def handle(self, alert: Dict) -> bool:
         """Send alert to webhook."""
         try:
-            payload = json.dumps(
-                {
-                    "timestamp": alert.get("timestamp", datetime.now().isoformat()),
-                    "alert_type": alert.get("alert_type", "pattern_match"),
-                    "camera_id": alert.get("camera_id", "unknown"),
-                    "pattern": alert.get("pattern"),
-                    "detected_text": alert.get("detected_text"),
-                    "confidence": alert.get("confidence"),
-                    "bbox": alert.get("bbox"),
-                }
-            ).encode("utf-8")
+            payload = {
+                "timestamp": alert.get("timestamp", datetime.now().isoformat()),
+                "alert_type": alert.get("alert_type", "pattern_match"),
+                "camera_id": alert.get("camera_id", "unknown"),
+                "pattern": alert.get("pattern"),
+                "detected_text": alert.get("detected_text"),
+                "confidence": alert.get("confidence"),
+                "bbox": alert.get("bbox"),
+            }
 
-            request = Request(self.url, data=payload, headers=self.headers)
-            with urlopen(request, timeout=self.timeout) as response:
-                if response.status == 200:
-                    self.logger.debug(f"Alert sent to webhook: {self.url}")
-                    return True
-                else:
-                    self.logger.warning(
-                        f"Webhook returned status {response.status}"
-                    )
-                    return False
-        except URLError as e:
+            response = requests.post(
+                self.url,
+                json=payload,
+                headers=self.headers,
+                timeout=self.timeout,
+            )
+
+            if response.status_code == 200:
+                self.logger.debug(f"Alert sent to webhook: {self.url}")
+                return True
+            else:
+                self.logger.warning(
+                    f"Webhook returned status {response.status_code}"
+                )
+                return False
+        except requests.RequestException as e:
             self.logger.error(f"Failed to send alert to webhook: {e}")
             return False
         except Exception as e:

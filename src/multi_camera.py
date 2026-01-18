@@ -11,10 +11,13 @@ import threading
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 import cv2
 import numpy as np
+
+# Maximum consecutive read errors before stopping a camera
+MAX_CAMERA_ERRORS = 10
 
 
 @dataclass
@@ -42,15 +45,15 @@ class CameraState:
     """Runtime state for a single camera."""
 
     config: CameraConfig
-    handler: any = None
-    thread: threading.Thread = None
+    handler: Optional[Any] = None
+    thread: Optional[threading.Thread] = None
     running: bool = False
     frame_count: int = 0
     detection_count: int = 0
-    last_frame_time: datetime = None
+    last_frame_time: Optional[datetime] = None
     error_count: int = 0
     status: str = "stopped"
-    session_id: int = None
+    session_id: Optional[int] = None
 
 
 class MultiCameraManager:
@@ -342,7 +345,7 @@ class MultiCameraManager:
 
                 if not ret or frame is None:
                     state.error_count += 1
-                    if state.error_count > 10:
+                    if state.error_count > MAX_CAMERA_ERRORS:
                         self.logger.error(
                             f"Camera {config.id}: Too many read errors, stopping"
                         )

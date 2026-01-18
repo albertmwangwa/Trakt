@@ -34,7 +34,12 @@ class DatabaseManager:
             self._initialize_database()
 
     def _get_connection(self) -> sqlite3.Connection:
-        """Get thread-local database connection."""
+        """Get thread-local database connection.
+
+        Each thread gets its own connection stored in thread-local storage,
+        ensuring thread safety. The check_same_thread=False is safe here
+        because each thread only uses its own connection.
+        """
         if not hasattr(self._local, "connection") or self._local.connection is None:
             self._local.connection = sqlite3.connect(
                 self.db_path, check_same_thread=False

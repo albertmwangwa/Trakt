@@ -270,14 +270,12 @@ class TestAlertManager(unittest.TestCase):
 class TestWebhookAlertHandler(unittest.TestCase):
     """Test cases for WebhookAlertHandler class."""
 
-    @patch.object(alerts, "urlopen")
-    def test_handle_success(self, mock_urlopen):
+    @patch.object(alerts.requests, "post")
+    def test_handle_success(self, mock_post):
         """Test successful webhook call."""
         mock_response = Mock()
-        mock_response.status = 200
-        mock_response.__enter__ = Mock(return_value=mock_response)
-        mock_response.__exit__ = Mock(return_value=False)
-        mock_urlopen.return_value = mock_response
+        mock_response.status_code = 200
+        mock_post.return_value = mock_response
 
         handler = WebhookAlertHandler("http://example.com/webhook")
         alert = {"alert_type": "test", "camera_id": "cam_1"}
@@ -285,12 +283,10 @@ class TestWebhookAlertHandler(unittest.TestCase):
         result = handler.handle(alert)
         self.assertTrue(result)
 
-    @patch.object(alerts, "urlopen")
-    def test_handle_failure(self, mock_urlopen):
+    @patch.object(alerts.requests, "post")
+    def test_handle_failure(self, mock_post):
         """Test failed webhook call."""
-        from urllib.error import URLError
-
-        mock_urlopen.side_effect = URLError("Connection refused")
+        mock_post.side_effect = alerts.requests.RequestException("Connection refused")
 
         handler = WebhookAlertHandler("http://example.com/webhook")
         alert = {"alert_type": "test", "camera_id": "cam_1"}
