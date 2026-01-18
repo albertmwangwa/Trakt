@@ -1,4 +1,4 @@
-# Camera configuration
+# Camera configuration (single camera - legacy support)
 camera:
   # ONVIF camera connection settings
   host: "192.168.1.100"  # Camera IP address
@@ -15,6 +15,32 @@ camera:
   resolution:
     width: 1920
     height: 1080
+
+# Multiple cameras configuration
+# Use this section to configure multiple simultaneous cameras
+cameras:
+  enabled: false          # Set to true to enable multi-camera mode
+  list:
+    - id: "cam_1"
+      name: "Front Entrance"
+      host: "192.168.1.100"
+      port: 80
+      username: "admin"
+      password: "password"
+      stream_profile: 0
+      transport: "tcp"
+      fps_limit: 5
+      enabled: true
+    # - id: "cam_2"
+    #   name: "Parking Lot"
+    #   host: "192.168.1.101"
+    #   port: 80
+    #   username: "admin"
+    #   password: "password"
+    #   stream_profile: 0
+    #   transport: "tcp"
+    #   fps_limit: 5
+    #   enabled: true
 
 # OCR configuration
 ocr:
@@ -104,3 +130,45 @@ app:
   # Display
   show_preview: false    # Show live preview window
   preview_scale: 0.5     # Scale factor for preview window
+
+# Database configuration
+database:
+  enabled: true                    # Enable database storage for results
+  path: "./output/trakt.db"        # SQLite database file path
+
+# Alert system configuration
+alerts:
+  enabled: true                    # Enable the alert system
+  
+  # Alert patterns - regex patterns to trigger alerts
+  patterns:
+    - name: "license_plate"
+      pattern: "[A-Z]{2,3}[0-9]{3,4}[A-Z]{0,2}"  # License plate pattern
+      priority: "high"
+      enabled: true
+      cooldown_seconds: 30         # Minimum seconds between alerts for same pattern
+    - name: "numeric_sequence"
+      pattern: "[0-9]{4,}"         # 4+ digit numbers
+      priority: "normal"
+      enabled: true
+      cooldown_seconds: 10
+    # - name: "custom_pattern"
+    #   pattern: "YOUR_REGEX_HERE"
+    #   priority: "critical"        # low, normal, high, critical
+    #   enabled: true
+    #   cooldown_seconds: 60
+  
+  # Alert handlers
+  handlers:
+    # Logging handler - logs alerts to application log
+    logging:
+      enabled: true
+      level: "WARNING"             # Log level for alerts
+    
+    # Webhook handler - sends alerts to HTTP endpoint
+    webhook:
+      enabled: false
+      url: "https://your-webhook-url.com/alerts"
+      timeout: 10
+      # headers:
+      #   Authorization: "Bearer your-token"

@@ -5,12 +5,14 @@ A comprehensive TensorFlow-based application template for performing OCR (Optica
 ## Features
 
 - 🎥 **ONVIF Camera Support**: Connect to any ONVIF-compliant IP camera
+- 📹 **Multiple Simultaneous Cameras**: Process multiple camera streams concurrently
 - 🔍 **Multiple OCR Engines**: Choose between Tesseract and EasyOCR
 - 🎯 **EAST Text Detection**: Optional text region detection for improved accuracy
 - 🖼️ **Advanced Preprocessing**: De-skewing, normalization, and illumination correction
 - 🤖 **TensorFlow Integration**: Support for custom TensorFlow models
 - 📊 **Real-time Processing**: Process video streams in real-time
-- 💾 **Configurable Output**: Save detected text and annotated frames
+- 💾 **Database Storage**: SQLite database for storing OCR results
+- 🚨 **Alert System**: Pattern-based alerts with webhook and logging support
 - 🐳 **Docker Support**: Easy deployment with Docker and Docker Compose
 - 📝 **Comprehensive Logging**: Detailed logging with colored console output
 - ⚙️ **Flexible Configuration**: YAML-based configuration for easy customization
@@ -21,6 +23,9 @@ A comprehensive TensorFlow-based application template for performing OCR (Optica
 - [Installation](#installation)
 - [Configuration](#configuration)
 - [Usage](#usage)
+- [Multiple Cameras](#multiple-cameras)
+- [Database Storage](#database-storage)
+- [Alert System](#alert-system)
 - [Docker Deployment](#docker-deployment)
 - [Project Structure](#project-structure)
 - [Testing](#testing)
@@ -211,6 +216,10 @@ Trakt/
 ├── src/
 │   ├── camera_handler.py   # ONVIF camera connection handler
 │   ├── ocr_engine.py       # OCR engine implementations
+│   ├── text_detector.py    # EAST text detection
+│   ├── multi_camera.py     # Multi-camera manager
+│   ├── database.py         # SQLite database integration
+│   ├── alerts.py           # Alert system for pattern matching
 │   └── web_api.py          # REST API with CORS support
 ├── web/                    # Web interface files
 │   ├── index.html          # Dashboard HTML
@@ -219,11 +228,16 @@ Trakt/
 ├── tests/
 │   ├── test_camera_handler.py
 │   ├── test_ocr_engine.py
+│   ├── test_text_detector.py
+│   ├── test_multi_camera.py
+│   ├── test_database.py
+│   ├── test_alerts.py
 │   └── test_web_api.py     # Web API tests
 ├── models/                 # Directory for TensorFlow models
 ├── output/
 │   ├── results/           # JSON results
 │   ├── frames/            # Annotated frames
+│   ├── trakt.db           # SQLite database
 │   └── trakt.log          # Application log
 └── README.md              # This file
 ```
@@ -344,14 +358,148 @@ ocr:
     - "\\b[A-Z]{2,}\\b"      # Uppercase words
 ```
 
-### Multiple Camera Support
+## Multiple Cameras
 
-To process multiple cameras, create separate configuration files and run multiple instances:
+Trakt supports processing multiple camera streams simultaneously. This is more efficient than running multiple instances as it shares the OCR engine and allows centralized management.
 
-```bash
-python main.py --config camera1_config.yaml &
-python main.py --config camera2_config.yaml &
+### Configuration
+
+Enable multi-camera mode in `config.yaml`:
+
+```yaml
+cameras:
+  enabled: true
+  list:
+    - id: "cam_1"
+      name: "Front Entrance"
+      host: "192.168.1.100"
+      port: 80
+      username: "admin"
+      password: "password"
+      stream_profile: 0
+      transport: "tcp"
+      fps_limit: 5
+      enabled: true
+    - id: "cam_2"
+      name: "Parking Lot"
+      host: "192.168.1.101"
+      port: 80
+      username: "admin"
+      password: "password"
+      stream_profile: 0
+      transport: "tcp"
+      fps_limit: 5
+      enabled: true
 ```
+
+Each camera is processed in its own thread, with results aggregated and stored centrally.
+
+### API Endpoints for Multi-Camera
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/cameras` | GET | Get all cameras status |
+| `/api/cameras/<camera_id>` | GET | Get specific camera status |
+
+## Database Storage
+
+Trakt includes SQLite database integration for storing OCR detection results and alerts.
+
+### Configuration
+
+Enable database storage in `config.yaml`:
+
+```yaml
+database:
+  enabled: true
+  path: "./output/trakt.db"
+```
+
+### Database Schema
+
+The database includes the following tables:
+
+- **detections**: Stores all OCR detection results with camera ID, timestamp, text, confidence, and bounding box
+- **alerts**: Stores triggered alerts with pattern information and status
+- **camera_sessions**: Tracks camera session start/end times and statistics
+
+### API Endpoints for Database
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/database/detections` | GET | Query detections with filters |
+| `/api/database/statistics` | GET | Get detection statistics |
+
+Query parameters for `/api/database/detections`:
+- `camera_id`: Filter by camera
+- `start_time`: Filter by start time (ISO format)
+- `end_time`: Filter by end time (ISO format)
+- `limit`: Maximum results (default: 100)
+- `offset`: Pagination offset
+
+## Alert System
+
+Trakt includes a powerful alert system that triggers notifications when specific text patterns are detected.
+
+### Configuration
+
+Configure alerts in `config.yaml`:
+
+```yaml
+alerts:
+  enabled: true
+  
+  patterns:
+    - name: "license_plate"
+      pattern: "[A-Z]{2,3}[0-9]{3,4}[A-Z]{0,2}"
+      priority: "high"
+      enabled: true
+      cooldown_seconds: 30  # Prevent alert spam
+    - name: "numeric_sequence"
+      pattern: "[0-9]{4,}"
+      priority: "normal"
+      enabled: true
+      cooldown_seconds: 10
+  
+  handlers:
+    logging:
+      enabled: true
+      level: "WARNING"
+    webhook:
+      enabled: false
+      url: "https://your-webhook-url.com/alerts"
+      timeout: 10
+```
+
+### Alert Handlers
+
+1. **Logging Handler**: Logs alerts to the application log
+2. **Webhook Handler**: Sends JSON alerts to an HTTP endpoint
+
+### Webhook Payload
+
+When a webhook is configured, alerts are sent as JSON:
+
+```json
+{
+  "timestamp": "2026-01-18T10:30:45.123456",
+  "alert_type": "pattern_match",
+  "camera_id": "cam_1",
+  "pattern": "[A-Z]{2,3}[0-9]{3,4}",
+  "detected_text": "ABC123",
+  "confidence": 0.95,
+  "bbox": [100, 50, 200, 100]
+}
+```
+
+### API Endpoints for Alerts
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/alerts` | GET | Get alerts from database |
+| `/api/alerts/<id>/status` | POST | Update alert status |
+| `/api/alerts/patterns` | GET | Get configured patterns |
+| `/api/alerts/patterns/<name>/enabled` | POST | Enable/disable a pattern |
 
 ### Real-time Preview
 
@@ -447,7 +595,7 @@ For issues, questions, or contributions, please open an issue on GitHub.
 
 - [x] Web interface for configuration and monitoring
 - [x] REST API for integration with other systems
-- [ ] Support for multiple simultaneous cameras
-- [ ] Database integration for results storage
-- [ ] Alert system for specific text patterns
+- [x] Support for multiple simultaneous cameras
+- [x] Database integration for results storage
+- [x] Alert system for specific text patterns
 - [ ] Enhanced TensorFlow model training utilities
