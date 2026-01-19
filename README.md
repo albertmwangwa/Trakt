@@ -346,6 +346,83 @@ tensorflow:
   input_shape: [224, 224, 3]
 ```
 
+### Training Custom OCR Models
+
+Trakt includes comprehensive training utilities for building custom OCR models.
+
+#### Quick Start
+
+```bash
+# Create a sample dataset and train a model
+python examples/train_ocr_model.py --create-sample --epochs 10 --augment
+```
+
+#### Training Components
+
+The training module (`src/training/`) includes:
+
+- **OCRDataset**: Dataset management with support for loading, preprocessing, and splitting data
+- **DataAugmentation**: Image augmentation (rotation, shift, zoom, brightness, noise, blur)
+- **OCRTrainer**: Model training with callbacks, checkpointing, and early stopping
+- **OCRMetrics**: Evaluation metrics (CER, WER, accuracy, precision, recall, F1)
+
+#### Training Configuration
+
+Configure training in `config.yaml`:
+
+```yaml
+training:
+  epochs: 100
+  batch_size: 32
+  learning_rate: 0.001
+  architecture: "cnn"  # or "crnn" for sequence recognition
+  
+  dataset:
+    image_size: [224, 224]
+    channels: 3
+    max_label_length: 32
+  
+  augmentation:
+    enabled: true
+    rotation_range: 10
+    brightness_range: [0.8, 1.2]
+```
+
+#### Programmatic Training
+
+```python
+from src.training import OCRDataset, OCRTrainer, DataAugmentation
+
+# Load dataset
+dataset = OCRDataset(data_dir="./data/ocr_dataset")
+dataset.load_from_directory()
+
+# Split data
+train_ds, val_ds, test_ds = dataset.split(train_ratio=0.8, val_ratio=0.1)
+
+# Configure trainer
+trainer = OCRTrainer(config={
+    "epochs": 100,
+    "batch_size": 32,
+    "num_classes": dataset.num_classes
+})
+
+# Build and compile model
+trainer.build_model(architecture="cnn")
+trainer.compile_model(optimizer="adam")
+
+# Train with augmentation
+augmentation = DataAugmentation()
+trainer.train(train_ds, val_ds, augmentation=augmentation)
+
+# Evaluate
+metrics = trainer.evaluate(test_ds)
+print(metrics)
+
+# Export model
+trainer.export_model("./exported_model", format="tflite")
+```
+
 ### Text Pattern Filtering
 
 Filter specific patterns (e.g., license plates, numbers):
@@ -598,4 +675,4 @@ For issues, questions, or contributions, please open an issue on GitHub.
 - [x] Support for multiple simultaneous cameras
 - [x] Database integration for results storage
 - [x] Alert system for specific text patterns
-- [ ] Enhanced TensorFlow model training utilities
+- [x] Enhanced TensorFlow model training utilities

@@ -172,3 +172,48 @@ alerts:
       timeout: 10
       # headers:
       #   Authorization: "Bearer your-token"
+
+# Model training configuration
+training:
+  # Training parameters
+  epochs: 100
+  batch_size: 32
+  learning_rate: 0.001
+  
+  # Early stopping
+  early_stopping_patience: 10
+  reduce_lr_patience: 5
+  reduce_lr_factor: 0.5
+  min_lr: 0.0000001
+  
+  # Model architecture: "cnn" or "crnn"
+  architecture: "cnn"
+  
+  # Dataset configuration
+  dataset:
+    image_size: [224, 224]
+    channels: 3
+    normalize: true
+    max_label_length: 32
+    charset: "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+  
+  # Data augmentation
+  augmentation:
+    enabled: true
+    rotation_range: 10
+    width_shift_range: 0.1
+    height_shift_range: 0.1
+    shear_range: 0.1
+    zoom_range: 0.1
+    brightness_range: [0.8, 1.2]
+    noise_stddev: 10
+    blur_kernel_range: [1, 3]
+  
+  # Output paths
+  checkpoint_dir: "./checkpoints"
+  log_dir: "./logs"
+  model_save_path: "./models/trained_ocr_model.h5"
+  
+  # GPU settings (same as tensorflow section)
+  allow_growth: true
+  gpu_memory_limit: null  # MB, set to null for no limit

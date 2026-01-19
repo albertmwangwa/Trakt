@@ -73,7 +73,73 @@ Your custom TensorFlow model should:
 
 ### Training Your Own Model
 
-Example of creating a custom OCR model:
+Trakt provides comprehensive training utilities. Here's how to train your own model:
+
+#### Using Training Utilities (Recommended)
+
+```python
+from src.training import OCRDataset, OCRTrainer, DataAugmentation
+
+# Load and prepare dataset
+dataset = OCRDataset(data_dir="./data/my_dataset", config={
+    "image_size": [224, 224],
+    "channels": 3,
+    "max_label_length": 32
+})
+dataset.load_from_directory()
+
+# Split into train/val/test
+train_ds, val_ds, test_ds = dataset.split(train_ratio=0.8, val_ratio=0.1)
+
+# Initialize trainer
+trainer = OCRTrainer(config={
+    "epochs": 100,
+    "batch_size": 32,
+    "learning_rate": 0.001,
+    "num_classes": dataset.num_classes,
+    "model_save_path": "./models/my_ocr_model.h5"
+})
+
+# Build CNN or CRNN model
+trainer.build_model(architecture="cnn")  # or "crnn"
+trainer.compile_model(optimizer="adam")
+
+# Train with data augmentation
+augmentation = DataAugmentation(config={
+    "rotation_range": 10,
+    "brightness_range": [0.8, 1.2],
+    "noise_stddev": 10
+})
+
+trainer.train(train_ds, val_ds, augmentation=augmentation)
+
+# Evaluate on test set
+metrics = trainer.evaluate(test_ds)
+print(f"Character Accuracy: {metrics['character_accuracy']:.4f}")
+print(f"Word Accuracy: {metrics['word_accuracy']:.4f}")
+
+# Export for deployment
+trainer.export_model("./models/exported", format="tflite")
+```
+
+#### Command Line Training
+
+```bash
+# Train with sample dataset
+python examples/train_ocr_model.py --create-sample --epochs 50 --augment
+
+# Train with your own dataset
+python examples/train_ocr_model.py \
+    --data-dir ./data/my_dataset \
+    --epochs 100 \
+    --batch-size 32 \
+    --architecture crnn \
+    --augment
+```
+
+#### Manual Model Creation
+
+Example of creating a custom OCR model manually:
 
 ```python
 import tensorflow as tf
