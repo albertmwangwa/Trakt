@@ -480,8 +480,9 @@ class OCRTrainer:
             if decode_fn:
                 text = decode_fn(pred)
             else:
-                # Simple argmax decoding
-                text = "".join([chr(int(np.argmax(p)) + 65) for p in pred])
+                # Simple argmax decoding - note: requires decode_fn for accurate results
+                # This fallback just converts indices to string representation
+                text = "".join([str(int(np.argmax(p))) for p in pred])
             decoded.append(text)
 
         return decoded

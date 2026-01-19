@@ -1,5 +1,9 @@
 """
 Tests for Training Utilities
+
+This test file imports from the training submodule directly to avoid triggering
+the main src/__init__.py which imports modules with external dependencies
+(onvif-zeep, flask, etc.) that may not be installed in all test environments.
 """
 
 import os
@@ -8,7 +12,8 @@ import tempfile
 import unittest
 from unittest.mock import Mock, patch
 
-# Add src/training to path to import modules directly without __init__.py side effects
+# Import training modules directly to avoid src/__init__.py side effects
+# The main package imports camera_handler which requires onvif-zeep
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src', 'training'))
 
 import numpy as np
