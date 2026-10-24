@@ -1,678 +1,197 @@
-# Trakt - TensorFlow OCR for ONVIF Cameras
+# Trakt
 
-A comprehensive TensorFlow-based application template for performing OCR (Optical Character Recognition) on video streams from ONVIF-compliant IP cameras.
+**Real-time text recognition from IP camera streams.** Trakt connects to ONVIF-compliant cameras, finds text in each frame, reads it with a pluggable OCR engine, stores every detection in SQLite, and raises alerts when text matches a pattern you care about (a licence plate, a container number, a serial code).
 
-## Features
+It also ships a TensorFlow training pipeline (CNN and CRNN with CTC loss) so you can train a recogniser on your own text domain instead of relying only on general-purpose OCR.
 
-- 🎥 **ONVIF Camera Support**: Connect to any ONVIF-compliant IP camera
-- 📹 **Multiple Simultaneous Cameras**: Process multiple camera streams concurrently
-- 🔍 **Multiple OCR Engines**: Choose between Tesseract and EasyOCR
-- 🎯 **EAST Text Detection**: Optional text region detection for improved accuracy
-- 🖼️ **Advanced Preprocessing**: De-skewing, normalization, and illumination correction
-- 🤖 **TensorFlow Integration**: Support for custom TensorFlow models
-- 📊 **Real-time Processing**: Process video streams in real-time
-- 💾 **Database Storage**: SQLite database for storing OCR results
-- 🚨 **Alert System**: Pattern-based alerts with webhook and logging support
-- 🐳 **Docker Support**: Easy deployment with Docker and Docker Compose
-- 📝 **Comprehensive Logging**: Detailed logging with colored console output
-- ⚙️ **Flexible Configuration**: YAML-based configuration for easy customization
+[![CI](https://github.com/albertmwangwa/Trakt/actions/workflows/ci.yml/badge.svg)](https://github.com/albertmwangwa/Trakt/actions/workflows/ci.yml)
+![Python](https://img.shields.io/badge/python-3.9%20%7C%203.10%20%7C%203.11-blue)
+![TensorFlow](https://img.shields.io/badge/TensorFlow-2.13%2B-orange)
+![License](https://img.shields.io/badge/license-MIT-green)
 
-## Table of Contents
+---
 
-- [Requirements](#requirements)
-- [Installation](#installation)
-- [Configuration](#configuration)
-- [Usage](#usage)
-- [Multiple Cameras](#multiple-cameras)
-- [Database Storage](#database-storage)
-- [Alert System](#alert-system)
-- [Docker Deployment](#docker-deployment)
-- [Project Structure](#project-structure)
-- [Testing](#testing)
-- [Advanced Usage](#advanced-usage)
-- [Contributing](#contributing)
-- [License](#license)
+## Why it exists
 
-## Requirements
+Most CCTV systems record text they never read. Gate cameras see plates, warehouse cameras see container and pallet codes, and production lines see printed batch numbers, but someone still has to watch the footage. Trakt turns those existing cameras into a searchable text log with alerts, without replacing any hardware.
 
-### System Requirements
-- Python 3.8 or higher
-- Tesseract OCR (for Tesseract engine)
-- ONVIF-compliant IP camera
+## How it works
 
-### Hardware Requirements
-- Minimum 4GB RAM
-- Optional: NVIDIA GPU for TensorFlow acceleration
+```mermaid
+flowchart LR
+    A[ONVIF cameras<br/>RTSP streams] --> B[Camera handler<br/>stream URI, FPS limit]
+    B --> C[Preprocessing<br/>deskew, contrast,<br/>illumination, denoise]
+    C --> D[EAST text detector<br/>regions + NMS]
+    D --> E{OCR engine}
+    E -->|Tesseract| F[Results]
+    E -->|EasyOCR| F
+    E -->|Custom TF model| F
+    F --> G[(SQLite<br/>detections, alerts,<br/>sessions)]
+    F --> H[Alert manager<br/>regex patterns,<br/>webhooks, logs]
+    G --> I[Flask REST API<br/>+ web dashboard]
+    H --> I
+```
 
-## Installation
+| Stage | Module | What it does |
+| --- | --- | --- |
+| Capture | `src/camera_handler.py`, `src/multi_camera.py` | Fetches the RTSP stream URI over ONVIF, captures frames with one thread per camera, limits frame rate |
+| Detect | `src/text_detector.py` | EAST text detection with non-max suppression; perspective correction and deskewing per region |
+| Read | `src/ocr_engine.py` | Tesseract, EasyOCR or a custom TensorFlow model behind one interface; confidence and length filtering |
+| Store | `src/database.py` | SQLite tables for detections, alerts and camera sessions, with query and statistics helpers |
+| Alert | `src/alerts.py` | Pattern rules (regex) that fire webhooks or log entries, each with a status you can acknowledge |
+| Serve | `src/web_api.py`, `web/` | REST API and a lightweight browser dashboard |
+| Train | `src/training/` | Dataset loading, augmentation, CNN/CRNN models, CTC loss, OCR metrics, export |
 
-### Standard Installation
+## Quick start
 
-1. Clone the repository:
 ```bash
 git clone https://github.com/albertmwangwa/Trakt.git
 cd Trakt
-```
-
-2. Install Tesseract OCR (if using Tesseract engine):
-
-**Ubuntu/Debian:**
-```bash
-sudo apt-get update
-sudo apt-get install tesseract-ocr tesseract-ocr-eng
-```
-
-**macOS:**
-```bash
-brew install tesseract
-```
-
-**Windows:**
-Download and install from [GitHub Tesseract releases](https://github.com/UB-Mannheim/tesseract/wiki)
-
-3. Install Python dependencies:
-```bash
+python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
+
+# Tesseract is only needed if you choose the Tesseract engine
+sudo apt-get install -y tesseract-ocr tesseract-ocr-eng   # macOS: brew install tesseract
 ```
 
-### GPU Support (Optional)
-
-For GPU acceleration, install TensorFlow with GPU support:
-
-```bash
-pip install tensorflow-gpu>=2.13.0
-```
-
-Ensure you have CUDA and cuDNN installed according to TensorFlow's requirements.
-
-## Configuration
-
-Edit `config.yaml` to configure your camera and OCR settings:
-
-### Camera Configuration
+Point `config.yaml` at your camera, then run:
 
 ```yaml
 camera:
-  host: "192.168.1.100"    # Your camera's IP address
-  port: 80                  # ONVIF port
-  username: "admin"         # Camera username
-  password: "password"      # Camera password
-  stream_profile: 0         # 0 = main stream, 1 = sub stream
-  transport: "tcp"          # tcp or udp
-  fps_limit: 5              # Process N frames per second
-```
+  host: "192.168.1.100"
+  port: 80
+  username: "admin"
+  password: "change-me"     # better: set via .env, see .env.example
+  fps_limit: 5
 
-### OCR Configuration
-
-```yaml
 ocr:
-  engine: "easyocr"         # Options: "tesseract" or "easyocr"
-  confidence_threshold: 0.5 # Minimum confidence (0-1)
-  min_text_length: 2        # Minimum characters to detect
+  engine: "easyocr"         # or "tesseract"
+  confidence_threshold: 0.5
 ```
-
-### Output Configuration
-
-```yaml
-output:
-  save_results: true        # Save detected text to JSON
-  results_dir: "./output/results"
-  save_frames: true         # Save annotated frames
-  frames_dir: "./output/frames"
-  save_interval: 30         # Save every N frames
-  log_level: "INFO"         # DEBUG, INFO, WARNING, ERROR
-```
-
-## Usage
-
-### Basic Usage
-
-Run the application with default configuration:
 
 ```bash
-python main.py
+python main.py --config config.yaml
 ```
 
-### Custom Configuration
-
-Use a custom configuration file:
+No camera to hand? Run OCR on a still image instead:
 
 ```bash
-python main.py --config /path/to/custom_config.yaml
+python examples/basic_ocr.py --help
+python examples/text_detection_pipeline.py --help
+python examples/license_plate_detection.py
 ```
 
-### Example Output
+### Docker
 
-The application will:
-1. Connect to your ONVIF camera
-2. Stream video frames
-3. Detect text in each frame
-4. Log detected text to console and file
-5. Save results and annotated frames (if enabled)
-
-Sample console output:
-```
-2026-01-06 10:30:45 - INFO - Starting Trakt OCR Application
-2026-01-06 10:30:45 - INFO - Connecting to ONVIF camera at 192.168.1.100:80
-2026-01-06 10:30:46 - INFO - Successfully connected to ONVIF camera
-2026-01-06 10:30:46 - INFO - Stream URI: rtsp://192.168.1.100:554/stream
-2026-01-06 10:30:47 - INFO - Initializing EasyOCR with languages: ['en']
-2026-01-06 10:30:50 - INFO - Frame 1: Detected 3 text regions
-2026-01-06 10:30:50 - INFO -   Text: 'PARKING' (confidence: 0.95)
-2026-01-06 10:30:50 - INFO -   Text: 'ABC123' (confidence: 0.89)
-```
-
-## Docker Deployment
-
-### Using Docker Compose (Recommended)
-
-1. Update `config.yaml` with your camera settings
-
-2. Build and run:
 ```bash
-docker-compose up -d
+cp .env.example .env    # add camera credentials
+docker compose up -d
 ```
 
-3. View logs:
+## Multiple cameras
+
+List cameras under `cameras:` in `config.yaml`. Each one gets its own capture thread and session record, and every detection is tagged with the camera it came from.
+
+## Alerts
+
+Define patterns under `alerts:` in `config.yaml`. A pattern is a name, a regular expression and the actions to take (log, webhook). Alerts are stored with a status, so the dashboard or an external system can mark them acknowledged or resolved through the API.
+
+## REST API
+
+Start the API on its own with `python -m src.web_api` (defaults to `127.0.0.1:5000`; set `FLASK_HOST`, `FLASK_PORT` and `FLASK_DEBUG` to change it).
+
+| Method | Endpoint | Returns |
+| --- | --- | --- |
+| GET | `/api/health` | Liveness check |
+| GET | `/api/status` | Running state, frame and detection counters |
+| GET | `/api/detections` | Latest in-memory detections |
+| GET | `/api/results` | Saved result files |
+| GET | `/api/cameras`, `/api/cameras/<id>` | Configured cameras and their state |
+| GET | `/api/camera/info` | Primary camera details |
+| GET | `/api/database/detections` | Stored detections; filter by `camera_id`, `start_time`, `end_time`, `limit`, `offset` |
+| GET | `/api/database/statistics` | Totals and per-camera counts |
+| GET | `/api/alerts` | Alert history |
+| POST | `/api/alerts/<id>/status` | Update an alert's status |
+| GET | `/api/alerts/patterns` | Configured patterns |
+| POST | `/api/alerts/patterns/<name>/enabled` | Enable or disable a pattern |
+
+The server binds to localhost by default. Put it behind a reverse proxy with authentication before exposing it on a network.
+
+## Training a custom recogniser
+
+General OCR struggles with stylised fonts, plates and low-resolution crops. The training module lets you fit a model to your own text domain.
+
 ```bash
-docker-compose logs -f
+# Generate a small synthetic dataset and train a CRNN on it
+python examples/train_ocr_model.py --create-sample --architecture crnn --epochs 20 --augment
+
+# Train on your own labelled crops
+python examples/train_ocr_model.py --data-dir path/to/dataset --architecture crnn \
+    --epochs 50 --batch-size 32 --learning-rate 0.001 --output-dir models/
 ```
 
-4. Stop the application:
+- **Architectures:** a CNN classifier for fixed-length text, and a CRNN (convolutional feature extractor + bidirectional recurrent layers) trained with **CTC loss** for variable-length sequences.
+- **Augmentation:** rotation, shift, shear, zoom, brightness, noise, blur and erode/dilate, to mimic real camera conditions.
+- **Metrics:** character and word accuracy, character and word error rate (CER, WER), normalised edit distance, sequence accuracy, precision, recall and F1.
+- **Export:** trained models plug straight back into the OCR engine through the `tensorflow:` section of `config.yaml`.
+
+## Testing and quality
+
 ```bash
-docker-compose down
+pip install pytest pytest-cov flake8
+python -m pytest tests/ -v --cov=src
 ```
 
-### Using Docker Only
+The suite covers camera handling, OCR, text detection, multi-camera management, the database, alerts, the web API and training: **118 tests, 63% line coverage** at the last recorded run (see [`DEPLOYMENT_TEST_RESULTS.md`](DEPLOYMENT_TEST_RESULTS.md)). GitHub Actions runs linting and the tests on Python 3.9, 3.10 and 3.11 for every push and pull request.
 
-Build the image:
-```bash
-docker build -t trakt-ocr .
-```
-
-Run the container:
-```bash
-docker run -d \
-  --name trakt-ocr \
-  -v $(pwd)/config.yaml:/app/config.yaml \
-  -v $(pwd)/output:/app/output \
-  trakt-ocr
-```
-
-## Project Structure
+## Project layout
 
 ```
 Trakt/
-├── main.py                 # Main application entry point
-├── config.yaml             # Configuration file
-├── requirements.txt        # Python dependencies
-├── Dockerfile              # Docker image definition
-├── docker-compose.yml      # Docker Compose configuration
-├── .gitignore              # Git ignore rules
-├── .github/
-│   └── workflows/          # GitHub Actions CI/CD workflows
-│       ├── ci.yml          # Build and test workflow
-│       └── code-quality.yml # Linting and security checks
+├── main.py                 # Application entry point
+├── config.yaml             # Cameras, OCR, alerts, database, training
 ├── src/
-│   ├── camera_handler.py   # ONVIF camera connection handler
-│   ├── ocr_engine.py       # OCR engine implementations
-│   ├── text_detector.py    # EAST text detection
-│   ├── multi_camera.py     # Multi-camera manager
-│   ├── database.py         # SQLite database integration
-│   ├── alerts.py           # Alert system for pattern matching
-│   └── web_api.py          # REST API with CORS support
-├── web/                    # Web interface files
-│   ├── index.html          # Dashboard HTML
-│   ├── styles.css          # Dashboard styles
-│   └── app.js              # Dashboard JavaScript
-├── tests/
-│   ├── test_camera_handler.py
-│   ├── test_ocr_engine.py
-│   ├── test_text_detector.py
-│   ├── test_multi_camera.py
-│   ├── test_database.py
-│   ├── test_alerts.py
-│   └── test_web_api.py     # Web API tests
-├── models/                 # Directory for TensorFlow models
-├── output/
-│   ├── results/           # JSON results
-│   ├── frames/            # Annotated frames
-│   ├── trakt.db           # SQLite database
-│   └── trakt.log          # Application log
-└── README.md              # This file
+│   ├── camera_handler.py   # ONVIF + RTSP capture
+│   ├── multi_camera.py     # Concurrent streams
+│   ├── text_detector.py    # EAST detection + region preprocessing
+│   ├── ocr_engine.py       # Tesseract / EasyOCR / TensorFlow engines
+│   ├── database.py         # SQLite persistence
+│   ├── alerts.py           # Pattern alerts + webhooks
+│   ├── web_api.py          # Flask REST API
+│   └── training/           # Dataset, augmentation, models, metrics
+├── web/                    # Dashboard (HTML, CSS, JS)
+├── examples/               # Runnable scripts
+├── tests/                  # pytest suite
+└── models/, output/        # Model weights and run outputs (git-ignored contents)
 ```
 
-## Testing
+## Status and roadmap
 
-Run the test suite:
+Trakt runs end to end on a single machine. The last recorded test run passed all unit tests; the Docker build hit an SSL certificate issue in that test environment, so treat the container setup as needing verification on your network.
 
-```bash
-# Run all tests
-python -m unittest discover tests
+Next steps:
 
-# Run specific test file
-python -m unittest tests/test_camera_handler.py
+- [ ] Automatic stream reconnection and ONVIF camera discovery (settings exist in `config.yaml`; logic still to wire up)
+- [ ] Authentication on the REST API and dashboard
+- [ ] PostgreSQL backend option for multi-site deployments
+- [ ] Benchmark table: CER/WER for each engine on a public plate dataset
+- [ ] Segmentation-first pipeline (promptable segmentation models) for small or curved text
 
-# Run with verbose output
-python -m unittest discover tests -v
-```
+## Related docs
 
-## Web Interface
+- [`QUICKSTART.md`](QUICKSTART.md): a five-minute walk-through
+- [`IMPLEMENTATION_SUMMARY.md`](IMPLEMENTATION_SUMMARY.md): design notes per module
+- [`CONTRIBUTING.md`](CONTRIBUTING.md): how to contribute
 
-Trakt includes a modern web interface for monitoring OCR activity and viewing results.
+## Responsible use
 
-### Starting the Web Server
+Reading text from cameras can capture personal data such as licence plates. Deploy Trakt only where you have a lawful basis to process that data, tell people the cameras are there, keep retention short, and restrict who can query the database.
 
-```bash
-python -m src.web_api
-```
+## Author
 
-The web interface will be available at `http://localhost:5000`.
-
-### REST API Endpoints
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/` | GET | Web dashboard |
-| `/api/health` | GET | Health check endpoint |
-| `/api/status` | GET | Application status and statistics |
-| `/api/detections` | GET | Recent OCR detections |
-| `/api/camera/info` | GET | Camera information |
-| `/api/results` | GET | Saved OCR results |
-
-### CORS Support
-
-The API supports Cross-Origin Resource Sharing (CORS), allowing integration with external web applications and services.
-
-## Advanced Usage
-
-### EAST Text Detection for Improved Accuracy
-
-Enable EAST (Efficient and Accurate Scene Text) detector for better text recognition:
-
-1. Download the EAST model:
-```bash
-wget https://github.com/oyyd/frozen-east-text-detection.pb/raw/master/frozen_east_text_detection.pb \
-     -O models/frozen_east_text_detection.pb
-```
-
-2. Enable in `config.yaml`:
-```yaml
-ocr:
-  use_text_detection: true
-  text_detection:
-    east_model_path: "./models/frozen_east_text_detection.pb"
-    confidence_threshold: 0.5
-    nms_threshold: 0.4
-    input_width: 320
-    input_height: 320
-    region_padding: 5
-  preprocessing:
-    apply_deskewing: true
-    apply_illumination_normalization: true
-```
-
-Benefits:
-- Detects text regions before OCR
-- Handles multiple text orientations
-- Improves accuracy on complex scenes
-- Reduces false positives
-
-### Advanced Image Preprocessing
-
-Configure preprocessing options for better OCR accuracy:
-
-```yaml
-ocr:
-  preprocessing:
-    apply_deskewing: true              # Correct rotation
-    apply_contrast_enhancement: false  # Enhance contrast (optional)
-    apply_noise_removal: false         # Remove noise (optional)
-    apply_illumination_normalization: true  # Normalize lighting
-```
-
-### Custom TensorFlow Models
-
-To use a custom TensorFlow model for OCR:
-
-1. Train your model and save it in `.h5` format
-2. Place the model in the `models/` directory
-3. Update `config.yaml`:
-
-```yaml
-tensorflow:
-  model_path: "./models/custom_ocr_model.h5"
-  use_pretrained: true
-  input_shape: [224, 224, 3]
-```
-
-### Training Custom OCR Models
-
-Trakt includes comprehensive training utilities for building custom OCR models.
-
-#### Quick Start
-
-```bash
-# Create a sample dataset and train a model
-python examples/train_ocr_model.py --create-sample --epochs 10 --augment
-```
-
-#### Training Components
-
-The training module (`src/training/`) includes:
-
-- **OCRDataset**: Dataset management with support for loading, preprocessing, and splitting data
-- **DataAugmentation**: Image augmentation (rotation, shift, zoom, brightness, noise, blur)
-- **OCRTrainer**: Model training with callbacks, checkpointing, and early stopping
-- **OCRMetrics**: Evaluation metrics (CER, WER, accuracy, precision, recall, F1)
-
-#### Training Configuration
-
-Configure training in `config.yaml`:
-
-```yaml
-training:
-  epochs: 100
-  batch_size: 32
-  learning_rate: 0.001
-  architecture: "cnn"  # or "crnn" for sequence recognition
-  
-  dataset:
-    image_size: [224, 224]
-    channels: 3
-    max_label_length: 32
-  
-  augmentation:
-    enabled: true
-    rotation_range: 10
-    brightness_range: [0.8, 1.2]
-```
-
-#### Programmatic Training
-
-```python
-from src.training import OCRDataset, OCRTrainer, DataAugmentation
-
-# Load dataset
-dataset = OCRDataset(data_dir="./data/ocr_dataset")
-dataset.load_from_directory()
-
-# Split data
-train_ds, val_ds, test_ds = dataset.split(train_ratio=0.8, val_ratio=0.1)
-
-# Configure trainer
-trainer = OCRTrainer(config={
-    "epochs": 100,
-    "batch_size": 32,
-    "num_classes": dataset.num_classes
-})
-
-# Build and compile model
-trainer.build_model(architecture="cnn")
-trainer.compile_model(optimizer="adam")
-
-# Train with augmentation
-augmentation = DataAugmentation()
-trainer.train(train_ds, val_ds, augmentation=augmentation)
-
-# Evaluate
-metrics = trainer.evaluate(test_ds)
-print(metrics)
-
-# Export model
-trainer.export_model("./exported_model", format="tflite")
-```
-
-### Text Pattern Filtering
-
-Filter specific patterns (e.g., license plates, numbers):
-
-```yaml
-ocr:
-  filter_patterns:
-    - "[A-Z]{3}[0-9]{3}"     # License plate pattern
-    - "[0-9]{3,}"            # Numbers with 3+ digits
-    - "\\b[A-Z]{2,}\\b"      # Uppercase words
-```
-
-## Multiple Cameras
-
-Trakt supports processing multiple camera streams simultaneously. This is more efficient than running multiple instances as it shares the OCR engine and allows centralized management.
-
-### Configuration
-
-Enable multi-camera mode in `config.yaml`:
-
-```yaml
-cameras:
-  enabled: true
-  list:
-    - id: "cam_1"
-      name: "Front Entrance"
-      host: "192.168.1.100"
-      port: 80
-      username: "admin"
-      password: "password"
-      stream_profile: 0
-      transport: "tcp"
-      fps_limit: 5
-      enabled: true
-    - id: "cam_2"
-      name: "Parking Lot"
-      host: "192.168.1.101"
-      port: 80
-      username: "admin"
-      password: "password"
-      stream_profile: 0
-      transport: "tcp"
-      fps_limit: 5
-      enabled: true
-```
-
-Each camera is processed in its own thread, with results aggregated and stored centrally.
-
-### API Endpoints for Multi-Camera
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/cameras` | GET | Get all cameras status |
-| `/api/cameras/<camera_id>` | GET | Get specific camera status |
-
-## Database Storage
-
-Trakt includes SQLite database integration for storing OCR detection results and alerts.
-
-### Configuration
-
-Enable database storage in `config.yaml`:
-
-```yaml
-database:
-  enabled: true
-  path: "./output/trakt.db"
-```
-
-### Database Schema
-
-The database includes the following tables:
-
-- **detections**: Stores all OCR detection results with camera ID, timestamp, text, confidence, and bounding box
-- **alerts**: Stores triggered alerts with pattern information and status
-- **camera_sessions**: Tracks camera session start/end times and statistics
-
-### API Endpoints for Database
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/database/detections` | GET | Query detections with filters |
-| `/api/database/statistics` | GET | Get detection statistics |
-
-Query parameters for `/api/database/detections`:
-- `camera_id`: Filter by camera
-- `start_time`: Filter by start time (ISO format)
-- `end_time`: Filter by end time (ISO format)
-- `limit`: Maximum results (default: 100)
-- `offset`: Pagination offset
-
-## Alert System
-
-Trakt includes a powerful alert system that triggers notifications when specific text patterns are detected.
-
-### Configuration
-
-Configure alerts in `config.yaml`:
-
-```yaml
-alerts:
-  enabled: true
-  
-  patterns:
-    - name: "license_plate"
-      pattern: "[A-Z]{2,3}[0-9]{3,4}[A-Z]{0,2}"
-      priority: "high"
-      enabled: true
-      cooldown_seconds: 30  # Prevent alert spam
-    - name: "numeric_sequence"
-      pattern: "[0-9]{4,}"
-      priority: "normal"
-      enabled: true
-      cooldown_seconds: 10
-  
-  handlers:
-    logging:
-      enabled: true
-      level: "WARNING"
-    webhook:
-      enabled: false
-      url: "https://your-webhook-url.com/alerts"
-      timeout: 10
-```
-
-### Alert Handlers
-
-1. **Logging Handler**: Logs alerts to the application log
-2. **Webhook Handler**: Sends JSON alerts to an HTTP endpoint
-
-### Webhook Payload
-
-When a webhook is configured, alerts are sent as JSON:
-
-```json
-{
-  "timestamp": "2026-01-18T10:30:45.123456",
-  "alert_type": "pattern_match",
-  "camera_id": "cam_1",
-  "pattern": "[A-Z]{2,3}[0-9]{3,4}",
-  "detected_text": "ABC123",
-  "confidence": 0.95,
-  "bbox": [100, 50, 200, 100]
-}
-```
-
-### API Endpoints for Alerts
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/alerts` | GET | Get alerts from database |
-| `/api/alerts/<id>/status` | POST | Update alert status |
-| `/api/alerts/patterns` | GET | Get configured patterns |
-| `/api/alerts/patterns/<name>/enabled` | POST | Enable/disable a pattern |
-
-### Real-time Preview
-
-Enable live preview window:
-
-```yaml
-app:
-  show_preview: true
-  preview_scale: 0.5  # Scale down for performance
-```
-
-Press 'q' to quit the preview window.
-
-## Camera Compatibility
-
-This application works with any ONVIF-compliant IP camera. Tested with:
-
-- Axis cameras
-- Hikvision cameras
-- Dahua cameras
-- Generic ONVIF cameras
-
-### Finding Your Camera's ONVIF Settings
-
-1. Check your camera's manual for ONVIF port (usually 80 or 8080)
-2. Enable ONVIF in camera settings
-3. Use ONVIF Device Manager to discover camera details
-4. Note the IP address, port, username, and password
-
-## Troubleshooting
-
-### Camera Connection Issues
-
-**Problem**: Cannot connect to camera
-- Verify camera IP address and port
-- Ensure ONVIF is enabled on the camera
-- Check username and password
-- Verify network connectivity
-
-**Problem**: Stream fails to start
-- Try changing transport from 'tcp' to 'udp' or vice versa
-- Check firewall settings
-- Verify RTSP port is accessible
-
-### OCR Issues
-
-**Problem**: Poor text detection accuracy
-- Try different OCR engine (tesseract vs easyocr)
-- Adjust confidence threshold
-- Enable preprocessing
-- Ensure adequate lighting in camera view
-
-**Problem**: Out of memory errors
-- Lower fps_limit in configuration
-- Reduce camera resolution
-- Disable frame saving
-- Use GPU acceleration
-
-## Performance Tips
-
-1. **Reduce Processing Load**: Lower `fps_limit` to process fewer frames
-2. **Use Sub-stream**: Set `stream_profile: 1` for lower resolution
-3. **Disable Frame Saving**: Set `save_frames: false` if not needed
-4. **GPU Acceleration**: Use GPU for both TensorFlow and EasyOCR
-5. **Batch Processing**: Increase batch_size for multiple cameras
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+**Albert William Mwangwa** · AI governance and data science, Dar es Salaam
+[GitHub](https://github.com/albertmwangwa)
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-
-- [TensorFlow](https://www.tensorflow.org/) - Machine learning framework
-- [EasyOCR](https://github.com/JaidedAI/EasyOCR) - OCR library
-- [Tesseract](https://github.com/tesseract-ocr/tesseract) - OCR engine
-- [python-onvif-zeep](https://github.com/FalkTannhaeuser/python-onvif-zeep) - ONVIF client
-
-## Support
-
-For issues, questions, or contributions, please open an issue on GitHub.
-
-## Roadmap
-
-- [x] Web interface for configuration and monitoring
-- [x] REST API for integration with other systems
-- [x] Support for multiple simultaneous cameras
-- [x] Database integration for results storage
-- [x] Alert system for specific text patterns
-- [x] Enhanced TensorFlow model training utilities
+[MIT](LICENSE)
